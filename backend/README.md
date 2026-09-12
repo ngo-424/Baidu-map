@@ -1,6 +1,6 @@
 # N02 · FastAPI 与百度地图连接验证
 
-本后端提供健康检查，以及手动执行一次百度地点检索的命令。前端 Demo 仍使用模拟数据。N02 通过不代表 FR-02 等时圈算法或 FR-03 完整设施业务已经实现。
+本后端提供健康检查、手动执行一次百度地点检索的命令，以及 N04/N05 合成等时圈与四组契约 Mock。前端 Demo 仍使用模拟数据。N02 通过不代表真实等时圈或完整设施业务已经实现。
 
 ## 1. 安装与启动（Windows PowerShell）
 
@@ -9,6 +9,7 @@
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.\.venv\Scripts\python.exe -m pip install --no-deps -e ../life-circle-algorithm
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
@@ -67,7 +68,7 @@ $LASTEXITCODE
 CORS_ORIGINS=["http://127.0.0.1:5173","http://localhost:5173"]
 ```
 
-允许 GET 和预检需要的 Content-Type，不允许凭据，不使用 `*`。非白名单来源无法通过浏览器读取响应；CORS 是浏览器策略，不是身份认证，普通 HTTP 客户端仍可访问健康检查。未来部署时替换为真实前端的完整来源（协议、域名及端口），重启服务；反向代理应禁用或脱敏可能带密钥的 URL 日志。
+允许 GET、POST 和预检需要的 Content-Type，不允许凭据，不使用 `*`。非白名单来源无法通过浏览器读取响应；CORS 是浏览器策略，不是身份认证，普通 HTTP 客户端仍可访问接口。未来部署时替换为真实前端的完整来源（协议、域名及端口），重启服务；反向代理应禁用或脱敏可能带密钥的 URL 日志。
 
 使用实际 Vite 前端来源验收：从 `backend` 执行以下命令复制测试页到已忽略的前端 `output` 目录，然后按前端 README 启动 Vite：
 
@@ -91,3 +92,14 @@ git check-ignore .env .venv/pyvenv.cfg logs/baidu-smoke.jsonl
 自动测试使用虚拟密钥和模拟 HTTP 响应，不使用真实 AK、不消耗配额。覆盖健康检查、配置优先级、缺少密钥、跨域、响应验证、网络失败、禁止重试与日志脱敏。当前依赖会产生 Starlette 测试客户端的兼容性弃用提示，不影响测试结果。
 
 复核人按 [N02 验收记录](docs/N02-验收记录.md) 检查结果。只有真实调用证据为 `success`，才能勾选“至少一次百度真实请求成功”；测试通过或健康检查成功不能替代此项。
+
+## N04 / N05 新入口
+
+已同步算法提交 `2d63015`（团队主分支合并 `50d3d6b`），并接入当前服务：
+
+- `GET /api/v1/analysis/mock/complete`：另有 `partial`、`failed`、`empty` 三组。
+- `POST /api/v1/analysis/synthetic`：实际执行合成时间场算法，不调用百度。
+- `/docs`：交互式请求与响应模型；[契约说明](docs/N05-接口契约.md)。
+- [参数、调用与边界样例](docs/N04-算法参数与边界.md)、[验收记录](docs/N04-N05-验收记录.md)。
+
+从 backend 执行 `python -m tools.export_contract` 可重建四组 Mock、JSON Schema 和 OpenAPI 快照。使用上述 `.venv` Python。

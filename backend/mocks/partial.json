@@ -1,0 +1,200 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "mock-partial-v1",
+  "generated_at": "2026-09-12T00:00:00Z",
+  "status": "partial",
+  "source": "mock",
+  "algorithm_version": null,
+  "data_updated_at": null,
+  "origin": {
+    "lng": 116.4,
+    "lat": 39.9
+  },
+  "coordinate_system": "bd09ll",
+  "coordinate_order": "longitude,latitude",
+  "units": {
+    "distance": "m",
+    "duration": "s",
+    "area": "m2"
+  },
+  "rules": {
+    "version": "n04-v1",
+    "time_threshold_s": 900,
+    "time_inclusive": true,
+    "time_tolerance_s": 0.0,
+    "time_confirmation": "implementation_only",
+    "distance": {
+      "metric": "unconfirmed",
+      "threshold_m": 1000.0,
+      "inclusive": null,
+      "tolerance_m": null,
+      "assessment_scope": "unconfirmed",
+      "category_policy": "unconfirmed"
+    }
+  },
+  "data": {
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.39,
+            39.89
+          ],
+          [
+            116.4,
+            39.89
+          ],
+          [
+            116.4,
+            39.91
+          ],
+          [
+            116.39,
+            39.91
+          ],
+          [
+            116.39,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "uncertain_region": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.39,
+            39.89
+          ],
+          [
+            116.41,
+            39.89
+          ],
+          [
+            116.41,
+            39.91
+          ],
+          [
+            116.39,
+            39.91
+          ],
+          [
+            116.39,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "unknown_region": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.4,
+            39.89
+          ],
+          [
+            116.41,
+            39.89
+          ],
+          [
+            116.41,
+            39.91
+          ],
+          [
+            116.4,
+            39.91
+          ],
+          [
+            116.4,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "computation_extent": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.39,
+            39.89
+          ],
+          [
+            116.41,
+            39.89
+          ],
+          [
+            116.41,
+            39.91
+          ],
+          [
+            116.39,
+            39.91
+          ],
+          [
+            116.39,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "facilities": [
+      {
+        "id": "mock-pharmacy",
+        "name": "虚构药店",
+        "category": "pharmacy",
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "in_circle": true
+      }
+    ],
+    "categories": [
+      {
+        "category": "market",
+        "query_status": "unknown",
+        "count_in_circle": null,
+        "service_status": "unknown"
+      },
+      {
+        "category": "pharmacy",
+        "query_status": "complete",
+        "count_in_circle": 1,
+        "service_status": "unknown"
+      },
+      {
+        "category": "school",
+        "query_status": "unknown",
+        "count_in_circle": null,
+        "service_status": "unknown"
+      }
+    ],
+    "blind_points": null,
+    "blind_region": null,
+    "report": null
+  },
+  "algorithm": null,
+  "warnings": [
+    {
+      "code": "MOCK_ONLY",
+      "message": "手工构造的契约样例，所有设施和规则选择均为虚构。",
+      "scope": "all",
+      "severity": "warning"
+    },
+    {
+      "code": "RULES_PENDING",
+      "message": "距离口径待确认，菜市场和小学数据未知。",
+      "scope": "rules,categories",
+      "severity": "pending"
+    }
+  ],
+  "errors": []
+}

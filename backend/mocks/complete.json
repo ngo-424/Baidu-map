@@ -1,0 +1,200 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "mock-complete-v1",
+  "generated_at": "2026-09-12T00:00:00Z",
+  "status": "complete",
+  "source": "mock",
+  "algorithm_version": null,
+  "data_updated_at": null,
+  "origin": {
+    "lng": 116.4,
+    "lat": 39.9
+  },
+  "coordinate_system": "bd09ll",
+  "coordinate_order": "longitude,latitude",
+  "units": {
+    "distance": "m",
+    "duration": "s",
+    "area": "m2"
+  },
+  "rules": {
+    "version": "n04-v1",
+    "time_threshold_s": 900,
+    "time_inclusive": true,
+    "time_tolerance_s": 0.0,
+    "time_confirmation": "mock_only",
+    "distance": {
+      "metric": "walking_route",
+      "threshold_m": 1000.0,
+      "inclusive": true,
+      "tolerance_m": 0.0,
+      "assessment_scope": "sample",
+      "category_policy": "per_category"
+    }
+  },
+  "data": {
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.39,
+            39.89
+          ],
+          [
+            116.41,
+            39.89
+          ],
+          [
+            116.41,
+            39.91
+          ],
+          [
+            116.39,
+            39.91
+          ],
+          [
+            116.39,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "uncertain_region": {
+      "type": "MultiPolygon",
+      "coordinates": [],
+      "coordinate_system": "bd09ll"
+    },
+    "unknown_region": {
+      "type": "MultiPolygon",
+      "coordinates": [],
+      "coordinate_system": "bd09ll"
+    },
+    "computation_extent": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            116.39,
+            39.89
+          ],
+          [
+            116.41,
+            39.89
+          ],
+          [
+            116.41,
+            39.91
+          ],
+          [
+            116.39,
+            39.91
+          ],
+          [
+            116.39,
+            39.89
+          ]
+        ]
+      ],
+      "coordinate_system": "bd09ll"
+    },
+    "facilities": [
+      {
+        "id": "mock-market",
+        "name": "虚构market",
+        "category": "market",
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "in_circle": true
+      },
+      {
+        "id": "mock-pharmacy",
+        "name": "虚构pharmacy",
+        "category": "pharmacy",
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "in_circle": true
+      },
+      {
+        "id": "mock-school",
+        "name": "虚构school",
+        "category": "school",
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "in_circle": true
+      }
+    ],
+    "categories": [
+      {
+        "category": "market",
+        "query_status": "complete",
+        "count_in_circle": 1,
+        "service_status": "covered"
+      },
+      {
+        "category": "pharmacy",
+        "query_status": "complete",
+        "count_in_circle": 1,
+        "service_status": "covered"
+      },
+      {
+        "category": "school",
+        "query_status": "complete",
+        "count_in_circle": 1,
+        "service_status": "covered"
+      }
+    ],
+    "blind_points": [
+      {
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "category": "market",
+        "status": "covered",
+        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
+      },
+      {
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "category": "pharmacy",
+        "status": "covered",
+        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
+      },
+      {
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
+        "category": "school",
+        "status": "covered",
+        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
+      }
+    ],
+    "blind_region": {
+      "type": "MultiPolygon",
+      "coordinates": [],
+      "coordinate_system": "bd09ll"
+    },
+    "report": "合成样例完成，起点评估三类服务均有设施。"
+  },
+  "algorithm": null,
+  "warnings": [
+    {
+      "code": "MOCK_ONLY",
+      "message": "手工构造的契约样例，所有设施和规则选择均为虚构。",
+      "scope": "all",
+      "severity": "warning"
+    }
+  ],
+  "errors": []
+}

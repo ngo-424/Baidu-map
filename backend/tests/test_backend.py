@@ -140,7 +140,9 @@ def test_failures_no_retry_or_leak(kind, outcome, caplog):
 
 
 def test_cli_missing_key_exit_and_record(tmp_path, monkeypatch):
-    monkeypatch.setenv("BAIDU_MAP_AK", "")
+    # Windows may drop an empty variable in a child process, allowing .env fallback.
+    # Nonempty whitespace survives inheritance and Settings strips it to missing.
+    monkeypatch.setenv("BAIDU_MAP_AK", " ")
     record = tmp_path / "record.jsonl"
     result = subprocess.run([sys.executable, "-m", "app.smoke", "--record", str(record)],
                             cwd=BACKEND_DIR, capture_output=True, text=True)

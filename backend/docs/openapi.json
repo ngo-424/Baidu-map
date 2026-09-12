@@ -1,0 +1,758 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Life Circle Backend",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/analysis/mock/{scenario}": {
+      "get": {
+        "tags": [
+          "N04/N05"
+        ],
+        "summary": "Mock Analysis",
+        "operationId": "mock_analysis_api_v1_analysis_mock__scenario__get",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "complete",
+                "partial",
+                "failed",
+                "empty"
+              ],
+              "type": "string",
+              "title": "Scenario"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/synthetic": {
+      "post": {
+        "tags": [
+          "N04/N05"
+        ],
+        "summary": "Synthetic Analysis",
+        "operationId": "synthetic_analysis_api_v1_analysis_synthetic_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalysisResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.0",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "analysis_id": {
+            "type": "string",
+            "title": "Analysis Id"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "failed",
+              "empty"
+            ],
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "synthetic",
+              "system"
+            ],
+            "title": "Source"
+          },
+          "algorithm_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm Version"
+          },
+          "data_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Updated At"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coordinate_system": {
+            "type": "string",
+            "const": "bd09ll",
+            "title": "Coordinate System",
+            "default": "bd09ll"
+          },
+          "coordinate_order": {
+            "type": "string",
+            "const": "longitude,latitude",
+            "title": "Coordinate Order",
+            "default": "longitude,latitude"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Units"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/Rules"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Data"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "source"
+        ],
+        "title": "AnalysisResponse"
+      },
+      "BlindPoint": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "pharmacy",
+              "school"
+            ],
+            "title": "Category"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "covered",
+              "blind",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "evidence": {
+            "type": "string",
+            "title": "Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "location",
+          "category",
+          "status",
+          "evidence"
+        ],
+        "title": "BlindPoint"
+      },
+      "CategoryResult": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "pharmacy",
+              "school"
+            ],
+            "title": "Category"
+          },
+          "query_status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "unknown",
+              "failed"
+            ],
+            "title": "Query Status"
+          },
+          "count_in_circle": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count In Circle"
+          },
+          "service_status": {
+            "type": "string",
+            "enum": [
+              "covered",
+              "blind",
+              "unknown"
+            ],
+            "title": "Service Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "query_status",
+          "count_in_circle",
+          "service_status"
+        ],
+        "title": "CategoryResult"
+      },
+      "Data": {
+        "properties": {
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uncertain_region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unknown_region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "computation_extent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "facilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Facility"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facilities"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryResult"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "blind_points": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/BlindPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blind Points"
+          },
+          "blind_region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Data"
+      },
+      "DistanceRule": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "unconfirmed",
+              "straight_line",
+              "walking_route"
+            ],
+            "title": "Metric",
+            "default": "unconfirmed"
+          },
+          "threshold_m": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Threshold M",
+            "default": 1000
+          },
+          "inclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inclusive"
+          },
+          "tolerance_m": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance M"
+          },
+          "assessment_scope": {
+            "type": "string",
+            "enum": [
+              "unconfirmed",
+              "isochrone",
+              "community",
+              "sample"
+            ],
+            "title": "Assessment Scope",
+            "default": "unconfirmed"
+          },
+          "category_policy": {
+            "type": "string",
+            "enum": [
+              "unconfirmed",
+              "per_category"
+            ],
+            "title": "Category Policy",
+            "default": "unconfirmed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DistanceRule"
+      },
+      "Facility": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "pharmacy",
+              "school"
+            ],
+            "title": "Category"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "in_circle": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Circle"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "location",
+          "in_circle"
+        ],
+        "title": "Facility"
+      },
+      "Geometry": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "Polygon",
+              "MultiPolygon"
+            ],
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {},
+            "type": "array",
+            "title": "Coordinates"
+          },
+          "coordinate_system": {
+            "type": "string",
+            "const": "bd09ll",
+            "title": "Coordinate System",
+            "default": "bd09ll"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "Geometry"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "baidu_ak_configured": {
+            "type": "boolean",
+            "title": "Baidu Ak Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "baidu_ak_configured"
+        ],
+        "title": "HealthResponse"
+      },
+      "Issue": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "error",
+              "pending"
+            ],
+            "title": "Severity",
+            "default": "warning"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "scope"
+        ],
+        "title": "Issue"
+      },
+      "Origin": {
+        "properties": {
+          "lng": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng"
+          },
+          "lat": {
+            "type": "number",
+            "exclusiveMaximum": 85.0,
+            "exclusiveMinimum": -85.0,
+            "title": "Lat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lng",
+          "lat"
+        ],
+        "title": "Origin"
+      },
+      "Rules": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": "n04-v1"
+          },
+          "time_threshold_s": {
+            "type": "integer",
+            "const": 900,
+            "title": "Time Threshold S",
+            "default": 900
+          },
+          "time_inclusive": {
+            "type": "boolean",
+            "const": true,
+            "title": "Time Inclusive",
+            "default": true
+          },
+          "time_tolerance_s": {
+            "type": "number",
+            "title": "Time Tolerance S",
+            "default": 0
+          },
+          "time_confirmation": {
+            "type": "string",
+            "enum": [
+              "implementation_only",
+              "mock_only"
+            ],
+            "title": "Time Confirmation",
+            "default": "implementation_only"
+          },
+          "distance": {
+            "$ref": "#/components/schemas/DistanceRule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Rules"
+      },
+      "SyntheticRequest": {
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "coordinate_system": {
+            "type": "string",
+            "const": "bd09ll",
+            "title": "Coordinate System"
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "plane",
+              "local_failure",
+              "global_failure"
+            ],
+            "title": "Scenario",
+            "default": "plane"
+          },
+          "budget": {
+            "type": "integer",
+            "maximum": 800.0,
+            "minimum": 144.0,
+            "title": "Budget",
+            "default": 400
+          },
+          "distance_rule": {
+            "$ref": "#/components/schemas/DistanceRule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "coordinate_system"
+        ],
+        "title": "SyntheticRequest"
+      }
+    }
+  }
+}
