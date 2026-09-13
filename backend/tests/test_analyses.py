@@ -248,6 +248,21 @@ def test_shared_qps_gate_spaces_jobs_and_honors_deadline():
     asyncio.run(run())
 
 
+def test_shared_qps_gate_rechecks_after_early_timer_wakeup():
+    from app.analyses import RateGate
+    now = [100.0]
+    async def sleep(delay):
+        now[0] += delay - .01 if delay > .02 else delay
+    async def run():
+        gate = RateGate(3, clock=lambda: now[0], sleep=sleep)
+        sends = []
+        for _ in range(5):
+            assert await gate.wait(110)
+            sends.append(now[0])
+        assert all(b-a >= 1/3-1e-9 for a,b in zip(sends,sends[1:]))
+    asyncio.run(run())
+
+
 def test_shutdown_cancels_provider_and_closes_context():
     closed = []
 

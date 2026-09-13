@@ -1,5 +1,7 @@
 import asyncio
 import math
+import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -90,3 +92,43 @@ def test_real_qps_required_and_retry_uses_budget():
             assert (await s.query(DEST)).duration == 700
             assert s.stats.requests == 2 and s.stats.retries == 1
     asyncio.run(run())
+
+
+def test_real_endpoint_string_fixture_is_verified():
+    # Minimized from live diagnostic #9: first and last of four steps only.
+    payload = json.loads((Path(__file__).parent / 'fixtures/guodingyi_endpoint_strings.json').read_text())
+    observation = BaiduProvider('fixture-only').parse(payload, (121.513926, 31.313077), (121.516031, 31.313077))
+    assert observation.duration == 367 and observation.endpoint_verified
+    assert observation.route_origin == (121.51392519758, 31.313079085826)
+    assert observation.route_destination == (121.51564164149, 31.313052749898)
+
+
+def test_string_endpoints_keep_offset_rejection_and_shortest_valid_route():
+    invalid = route(100, end=(116.411, 39.901))
+    valid = route(800)
+    for item in (invalid, valid):
+        for endpoint in item['steps'][0].values():
+            endpoint.update({axis: str(value) for axis, value in endpoint.items()})
+    assert query(response([invalid])).reason == 'endpoint_offset'
+    observation = query(response([invalid, valid]))
+    assert observation.duration == 800 and observation.endpoint_verified
+
+
+@pytest.mark.parametrize('value', [None, True, False, '', 'NaN', 'Infinity', '-inf', '1e9999',
+    '1_16.4', '116,4', [], {}, '181', '0x74', 10**400])
+def test_bad_endpoint_values_remain_unverified(value):
+    item = route(700)
+    item['steps'][0]['start_location']['lng'] = value
+    observation = query(response([item]))
+    assert observation.duration == 700 and not observation.endpoint_verified
+
+
+@pytest.mark.parametrize('point', [{'lng': '116.4', 'lat': '91'}, {'lng': '116.4'},
+    {'lng': '116.4', 'lat': '-91'}, None, ['116.4', '39.9']])
+def test_invalid_or_missing_endpoint_structure(point):
+    assert BaiduProvider._endpoint(point) is None
+
+
+def test_numeric_string_conversion_keeps_precision_and_mixed_types():
+    assert BaiduProvider._endpoint({'lng': ' 116.400000123456 ', 'lat': 39.9}) == (116.400000123456, 39.9)
+    assert BaiduProvider._endpoint({'lng': '1.164e2', 'lat': '+39.9'}) == ORIGIN

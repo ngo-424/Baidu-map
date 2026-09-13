@@ -86,22 +86,39 @@ class Job:
 
 
 class RateGate:
-    """Shared across jobs; each actual attempt passes here, including retries."""
-    def __init__(self, qps, *, clock=time.monotonic, sleep=asyncio.sleep):
+    """Shared across jobs, including retries; space attempts after completion."""
+    def __init__(self, qps, *, clock=time.monotonic, sleep=asyncio.sleep, spacing_clock=None):
         self.interval = 1 / qps if qps else 0
         self.next_send = 0
         self.lock = asyncio.Lock()
+        self.attempt_lock = asyncio.Lock()
         self.clock, self.sleep = clock, sleep
+        # On Python 3.11/Windows monotonic can be quantized to 15.625 ms.
+        # Deadlines keep their original epoch; pacing uses the precise counter.
+        self.spacing_clock = spacing_clock or (time.perf_counter if clock is time.monotonic else clock)
 
     async def wait(self, deadline):
         async with self.lock:
-            now = self.clock()
+            now = self.spacing_clock()
             when = max(now, self.next_send)
-            if when >= deadline:
+            if self.clock() + when - now >= deadline:
                 return False
             await self.sleep(max(0, when - now))
-            self.next_send = self.clock() + self.interval
+            # asyncio timers can wake before their requested time. Recheck the
+            # clock under the lock rather than treating sleep as a permit.
+            while self.spacing_clock() < when:
+                if self.clock() >= deadline:
+                    return False
+                await self.sleep(max(when - self.spacing_clock(), time.get_clock_info('monotonic').resolution))
+            if self.clock() >= deadline:
+                return False
+            self.next_send = self.spacing_clock() + self.interval
             return True
+
+    def completed(self, reason):
+        # Cool down all subsequent attempts, not just this destination's retry.
+        cooldown = max(self.interval, 1) if reason in ('rate_limit', 'timeout', 'interrupted') else self.interval
+        self.next_send = max(self.next_send, self.spacing_clock() + cooldown)
 
 
 class LimitedProvider:
@@ -112,9 +129,18 @@ class LimitedProvider:
         self.identity = provider.identity
 
     async def query_walking_time(self, origin, destination, deadline):
-        if not await self.gate.wait(deadline):
-            return RouteObservation(destination, reason="deadline")
-        return await self.provider.query_walking_time(origin, destination, deadline)
+        # A permit alone cannot control server arrivals after DNS/TLS/pool delays.
+        # Keep the shared slot through the response and start spacing afterwards.
+        async with self.gate.attempt_lock:
+            if not await self.gate.wait(deadline):
+                return RouteObservation(destination, reason="deadline")
+            reason = 'interrupted'
+            try:
+                result = await self.provider.query_walking_time(origin, destination, deadline)
+                reason = result.reason
+                return result
+            finally:
+                self.gate.completed(reason)
 
 
 class AnalysisManager:

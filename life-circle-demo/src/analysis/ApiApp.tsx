@@ -5,6 +5,7 @@ import { createApiService } from './service';
 import { AnalysisController } from './controller';
 import type { AnalysisState, Budget, Isochrone } from './types';
 import { ApiMap, type Layers } from './ApiMap';
+import { LocationControls } from './LocationControls';
 import { geometryMessage } from './geometry';
 import './api.css';
 import { FacilityPanel } from './FacilityPanel';
@@ -70,7 +71,8 @@ export default function ApiApp() {
     <header className="api-header"><div><span className="api-brand">15</span><div><h1>15 分钟生活圈</h1><p>自适应网格 · 步行等时圈分析</p></div></div><Tag color="teal">后端算法入口</Tag></header>
     <main className="api-layout">
       <section className="api-controls" aria-label="分析条件">
-        <Card title="选择分析中心"><p className="api-muted">在地图上选点，或输入百度坐标。默认坐标仅用于选点起始位置，尚未进行社区实验验证。</p>
+        <Card title="选择分析中心"><p className="api-muted">在地图上选点、获取当前位置或搜索地点，也可输入百度坐标。默认坐标仅用于选点起始位置，尚未进行社区实验验证。</p>
+          <LocationControls center={center} onPick={choose} />
           <label className="api-label">经度<InputNumber aria-label="经度" value={lng} onChange={value => edit('lng', value)} precision={6} /></label>
           <label className="api-label">纬度<InputNumber aria-label="纬度" value={lat} onChange={value => edit('lat', value)} precision={6} /></label>
           <label className="api-label">等时圈采样预算<Select aria-label="调用预算" value={budget} onChange={value => { void controller.current?.reset(); setBudget(value); }} options={[200, 400, 800].map(value => ({ value, label: `${value} 次` }))} /></label>
