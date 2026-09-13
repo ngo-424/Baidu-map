@@ -1,6 +1,7 @@
 """Fixed 96-point boundary reference experiment; 1392 reserved attempts maximum."""
 import argparse
 import asyncio
+import csv
 from collections import Counter
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -39,6 +40,30 @@ LIMITS={'reference':192,'adaptive':400,'uniform':400,'radial':400}
 class BoundaryLedger(ExperimentLedger):
     phase_limits=LIMITS
     total_limit=1392
+
+    def save(self):
+        try:
+            Ledger.save(self)
+        except OSError as error:
+            self.data['halted']='ledger_write_failed'
+            self.data.setdefault('recording_error',{'operation':'ledger_atomic_save',
+                'errno':error.errno,'winerror':getattr(error,'winerror',None),
+                'event_id':len(self.data['events'])})
+            raise LiveGuardError('ledger_write_failed') from None
+
+
+class ProgressTransport(ComparisonTransport):
+    """Observe stdout progress; do not open the live ledger from another process."""
+    def __init__(self,*args,progress=None,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.progress=progress
+
+    async def handle_async_request(self,request):
+        response=await super().handle_async_request(request)
+        counts=phase_accounting(self.ledger.data['events'],self.phase)
+        if self.progress and (counts['actual_calls']==1 or counts['actual_calls']%20==0):
+            self.progress({'stage':self.phase,'status':'progress',**counts})
+        return response
 
 
 def make_boundary_protocol(old_protocol, references):
@@ -100,7 +125,7 @@ def pair_coverage(references, excluded=()):
 async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, progress=None):
     clock=clock or Clock()
     ledger.clock=clock.time
-    transport=ComparisonTransport(ledger,inner,clock=clock.time if gate is not None else time.perf_counter)
+    transport=ProgressTransport(ledger,inner,clock=clock.time if gate is not None else time.perf_counter,progress=progress)
     shared_gate=gate or RateGate(3)
     if protocol['limits']!=LIMITS or protocol['order']!=list(METHODS):
         raise LiveGuardError('protocol_mismatch')
@@ -134,7 +159,8 @@ async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, pr
             if scheduler.stop_reason in ('cancelled','upstream_failure'):
                 ledger.data['halted']=ledger.data['halted'] or scheduler.stop_reason
             passed=coverage['passed'] and not ledger.data['halted']
-            report['stages']['reference']={**coverage,'status':'passed' if passed else 'failed',
+            report['stages']['reference']={**coverage,'coverage_passed':coverage['passed'],'passed':passed,
+                                          'status':'passed' if passed else 'failed',
                                           'elapsed_seconds':clock.time()-started}
             if not passed: ledger.data['halted']=ledger.data['halted'] or 'reference_coverage_insufficient'
             for method in protocol['order']:
@@ -201,14 +227,53 @@ async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, pr
     return report
 
 
+def audit_boundary(root):
+    """Additive post-run audit: reconcile scheduler placeholders with handoff evidence."""
+    root=Path(root)
+    source_names=['config.json','protocol.json','ledger.json','reference.json','result.json','metrics.json',
+                  'metrics.csv','point-evaluation.json',*[f'{m}.json' for m in METHODS]]
+    hashes={name:file_hash(root/name) for name in source_names}
+    ledger=json.loads((root/'ledger.json').read_text(encoding='utf-8'))
+    report=json.loads((root/'result.json').read_text(encoding='utf-8'))
+    points=json.loads((root/'point-evaluation.json').read_text(encoding='utf-8'))
+    state=report['stages']['reference']
+    state['coverage_passed']=reference_gate(points)['passed']
+    state['passed']=state['status']=='passed' and state['coverage_passed'] and not report['halted']
+    for sample in points:
+        events=[e for e in ledger['events'] if e['phase']=='reference' and e['destination']==sample['point']]
+        actual=[e for e in events if 'dispatchPerf' in e]
+        sample['measurement_status']=('valid' if valid_reference(sample) else 'invalid_reference') if actual else (
+            'reserved_without_confirmed_send' if events else 'not_sent_after_stop')
+        sample['confirmed_calls']=len(actual)
+        sample['transport_outcomes']=[e['outcome'] for e in actual]
+    report['reference_measurement_status']=dict(Counter(p['measurement_status'] for p in points))
+    report['audit']={'source_sha256':hashes,'audit_tool_sha256':file_hash(Path(__file__)),
+                     'note':'original artifacts preserved; coverage_passed differs from stage passed'}
+    dump(root/'audited-result.json',report)
+    dump(root/'audited-point-evaluation.json',points)
+    dump(root/'audited-metrics.json',report['metrics'])
+    with (root/'audited-metrics.csv').open('w',encoding='utf-8-sig',newline='') as stream:
+        writer=csv.DictWriter(stream,fieldnames=list(dict.fromkeys(k for row in report['metrics'] for k in row)))
+        writer.writeheader()
+        writer.writerows({k:json.dumps(v,ensure_ascii=False) if isinstance(v,(list,dict)) else v for k,v in row.items()} for row in report['metrics'])
+    if any(file_hash(root/name)!=h for name,h in hashes.items()): raise ValueError('original_artifact_changed')
+    return report
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     group=parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--prepare',action='store_true')
     group.add_argument('--execute-live',action='store_true')
+    group.add_argument('--audit',action='store_true')
     args=parser.parse_args()
     silence_transport_logs()
     try:
+        if args.audit:
+            result=audit_boundary(ROOT)
+            print(json.dumps({'counts':result['counts'],'halted':result['halted'],
+                              'reference_measurement_status':result['reference_measurement_status']}))
+            return
         repo=Path(__file__).resolve().parents[2]
         def git(*args): return subprocess.check_output(['git','-C',str(repo),*args],text=True,stderr=subprocess.DEVNULL).strip()
         manifest=json.loads((repo/'backend/docs/comparison-v1_冻结清单.json').read_text(encoding='utf-8'))
