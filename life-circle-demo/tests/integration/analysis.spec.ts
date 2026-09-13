@@ -1,7 +1,16 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function mockMap(page: Page) {
-  await page.addInitScript(() => {
+type LocationFixture = {
+  geolocation?: 'ok' | 'denied' | 'timeout';
+  accuracy?: number;
+  nearbyEmpty?: boolean;
+  places?: { title: string; address?: string; uid?: string; lng: number; lat: number }[];
+  farPlaces?: { title: string; address?: string; uid?: string; lng: number; lat: number }[];
+  geocode?: { lng: number; lat: number } | null;
+};
+
+async function mockMap(page: Page, location: LocationFixture = {}) {
+  await page.addInitScript((fixture: LocationFixture) => {
     const storage = window as unknown as { __polygons: { points: string[]; options: { fillColor?: string } }[] };
     storage.__polygons = [];
     class Overlay { addEventListener() {} removeEventListener() {} }
@@ -44,8 +53,44 @@ async function mockMap(page: Page) {
     class Polygon extends Overlay {
       constructor(public points: string[], public options: { fillColor?: string; fillOpacity?: number; strokeColor?: string }) { super(); storage.__polygons.push({ points, options }); }
     }
-    Object.assign(window, { BMapGL: { Map, Point, Polygon, Marker: Overlay } });
-  });
+    class Geolocation {
+      private status = 0;
+      getCurrentPosition(callback: (result: unknown) => void) {
+        const mode = fixture.geolocation ?? 'ok';
+        if (mode === 'denied') { this.status = 6; setTimeout(() => callback(null), 0); return; }
+        if (mode === 'timeout') { this.status = 8; setTimeout(() => callback(null), 0); return; }
+        setTimeout(() => callback({
+          point: { lng: 116.418, lat: 39.921 }, accuracy: fixture.accuracy ?? 30,
+          address: { province: '北京市', city: '北京市', district: '东城区', street: '测试街', streetNumber: '1号' },
+        }), 0);
+      }
+      getStatus() { return this.status; }
+    }
+    class LocalSearch {
+      constructor(public location: unknown, public options: { onSearchComplete?: (results: unknown) => void; pageCapacity?: number }) {}
+      private respond(places: NonNullable<LocationFixture['places']>) {
+        const result = {
+          getPoi: (index: number) => places[index]
+            ? { ...places[index], point: { lng: places[index].lng, lat: places[index].lat } }
+            : undefined,
+          getCurrentNumPois: () => places.length,
+          getNumPois: () => places.length,
+        };
+        setTimeout(() => this.options.onSearchComplete?.(result), 0);
+      }
+      searchNearby() { this.respond(fixture.nearbyEmpty ? [] : fixture.places ?? []); }
+      searchInBounds() { this.respond(fixture.farPlaces ?? []); }
+      search() {}
+      clearResults() {}
+    }
+    class Bounds { constructor(public sw: unknown, public ne: unknown) {} }
+    class Geocoder {
+      getPoint(_address: string, callback: (point: unknown) => void) {
+        setTimeout(() => callback(fixture.geocode ?? null), 0);
+      }
+    }
+    Object.assign(window, { BMapGL: { Map, Point, Polygon, Marker: Overlay, Geolocation, LocalSearch, Bounds, Geocoder } });
+  }, location);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -175,4 +220,94 @@ test('malformed successful result shows a format error instead of crashing the p
   await page.getByRole('button', { name: '开始分析', exact: true }).click();
   await expect(page.getByText('后端返回格式异常，请检查服务版本', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('device location fills the center and reports accuracy and address', async ({ page }) => {
+  await mockMap(page, { geolocation: 'ok' });
+  await page.goto('/');
+  await page.getByRole('button', { name: '获取当前位置', exact: true }).click();
+  await expect(page.getByText(/已定位：北京市东城区测试街1号 · 定位精度约 30 米/)).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/116\.418/);
+  await expect(page.getByRole('spinbutton', { name: '纬度', exact: true })).toHaveValue(/39\.921/);
+});
+
+test('coarse device location warns for map verification', async ({ page }) => {
+  await mockMap(page, { geolocation: 'ok', accuracy: 800 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '获取当前位置', exact: true }).click();
+  await expect(page.getByText(/定位可能偏差较大，请在地图上核对/)).toBeVisible();
+});
+
+test('denied device location keeps manual coordinates and explains how to retry', async ({ page }) => {
+  await mockMap(page, { geolocation: 'denied' });
+  await page.goto('/');
+  await page.getByRole('button', { name: '获取当前位置', exact: true }).click();
+  await expect(page.getByText('定位权限被拒绝，请在浏览器设置中允许定位后重试', { exact: true })).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/116\.404/);
+});
+
+test('POI search selection becomes the analysis center', async ({ page }) => {
+  await mockMap(page, { places: [{ title: '测试公园', address: '测试路1号', uid: 'poi-1', lng: 116.5, lat: 39.95 }] });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('公园');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('button', { name: /测试公园/ }).click();
+  await expect(page.getByText(/已选择：测试公园 · 测试路1号/)).toBeVisible();
+  const created = page.waitForRequest(r => r.url().endsWith('/api/analyses') && r.method() === 'POST');
+  const result = page.waitForResponse(r => /\/api\/analyses\/[^/]+\/result$/.test(r.url()) && r.status() === 200);
+  await page.getByRole('button', { name: '开始分析', exact: true }).click();
+  expect((await created).postDataJSON().center).toEqual({ lng: 116.5, lat: 39.95 });
+  await result;
+});
+
+test('empty POI search result shows a retry hint', async ({ page }) => {
+  await mockMap(page, { places: [] });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('不存在的地方');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('未找到相关地点，请尝试其他关键词', { exact: true })).toBeVisible();
+});
+
+test('POI search falls back to far options when nothing is nearby', async ({ page }) => {
+  await mockMap(page, {
+    nearbyEmpty: true,
+    farPlaces: [
+      { title: '远郊公园', address: '远郊路9号', uid: 'poi-far', lng: 117.2, lat: 40.3 },
+      { title: '远郊花园', address: '远郊路10号', uid: 'poi-loose', lng: 117.3, lat: 40.3 },
+    ],
+  });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('公园');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /远郊花园/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /远郊公园/ }).click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/117\.2/);
+});
+
+test('POI search lists nearby results first and keeps far options', async ({ page }) => {
+  await mockMap(page, {
+    places: [{ title: '近处公园', address: '近处路1号', uid: 'poi-near', lng: 116.41, lat: 39.92 }],
+    farPlaces: [{ title: '远郊公园', address: '远郊路9号', uid: 'poi-far', lng: 117.2, lat: 40.3 }],
+  });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('公园');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('附近结果（5 公里内）', { exact: true })).toBeVisible();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  const options = page.getByRole('button', { name: /公园/ });
+  await expect(options).toHaveCount(2);
+  await options.first().click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/116\.41/);
+});
+
+test('POI search resolves a nationwide administrative name through address fallback', async ({ page }) => {
+  await mockMap(page, { geocode: { lng: 120.43, lat: 27.52 } });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('苍南县');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  await expect(page.getByText('地址定位', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /苍南县/ }).click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/120\.43/);
 });

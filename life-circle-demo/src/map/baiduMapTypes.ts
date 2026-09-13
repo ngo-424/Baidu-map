@@ -80,6 +80,76 @@ export interface BMapMap {
   destroy?(): void;
 }
 
+/** 地址分量：定位与逆地理结果共用，字段均可能缺失。 */
+export interface BMapAddressComponent {
+  province?: string;
+  city?: string;
+  district?: string;
+  street?: string;
+  streetNumber?: string;
+}
+
+/** 浏览器定位参数；与官方 PositionOptions 对齐。 */
+export interface BMapPositionOptions {
+  enableHighAccuracy?: boolean;
+  timeout?: number;
+  maximumAge?: number;
+}
+
+export interface BMapGeolocationResult {
+  point: BMapPoint;
+  /** 定位精度半径，单位米；缺失表示不可知。 */
+  accuracy?: number;
+  address?: BMapAddressComponent;
+}
+
+/** 浏览器定位（失败自动 IP 兜底）；成功坐标已是 BD09LL。 */
+export interface BMapGeolocation {
+  getCurrentPosition(
+    callback: (this: BMapGeolocation | undefined, result: BMapGeolocationResult | null) => void,
+    options?: BMapPositionOptions
+  ): void;
+  getStatus(): number;
+}
+
+export interface BMapLocalResultPoi {
+  title: string;
+  point: BMapPoint;
+  address?: string;
+  uid?: string;
+  province?: string;
+  city?: string;
+}
+
+/** 检索结果容器：官方提供 getPoi 与两个计数方法。 */
+export interface BMapLocalSearchResult {
+  getPoi(index: number): BMapLocalResultPoi;
+  getCurrentNumPois(): number;
+  getNumPois(): number;
+}
+
+export interface BMapLocalSearchOptions {
+  /** 1 - 100，默认 10。 */
+  pageCapacity?: number;
+  /** 单个关键词时 results 为单个 LocalResult；不做数组关键词检索。 */
+  onSearchComplete?: (results: BMapLocalSearchResult | null) => void;
+}
+
+export interface BMapLocalSearch {
+  search(keyword: string): void;
+  searchNearby(keyword: string, center: BMapPoint | string, radius: number): void;
+  searchInBounds(keyword: string, bounds: BMapBounds): void;
+  clearResults(): void;
+}
+
+/** 矩形范围，供区域检索使用；由 Bounds(sw, ne) 构造。 */
+export interface BMapBounds {}
+
+/** 地址解析：把地址/行政区名称转为 BD09LL 坐标；city 可选，缺省不限定城市。 */
+export interface BMapGeocoder {
+  getPoint(address: string, callback: (point: BMapPoint | null) => void, city?: string): void;
+}
+
 /** 脚本加载完成后挂到 window 的全局对象。 */
 export interface BaiduMapApi {
   Map: new (container: HTMLElement) => BMapMap;
@@ -90,6 +160,11 @@ export interface BaiduMapApi {
   Marker: new (point: BMapPoint, options?: BMapMarkerOptions) => BMapOverlay;
   Icon: new (url: string, size: BMapSize, options?: BMapIconOptions) => BMapIcon;
   InfoWindow: new (content: string, options?: BMapInfoWindowOptions) => BMapInfoWindow;
+  /** 定位与检索构造器为可选：旧版脚本或测试替身可能不提供，调用方必须运行时判断。 */
+  Geolocation?: new () => BMapGeolocation;
+  LocalSearch?: new (location: string | BMapMap | BMapPoint, options?: BMapLocalSearchOptions) => BMapLocalSearch;
+  Bounds?: new (sw: BMapPoint, ne: BMapPoint) => BMapBounds;
+  Geocoder?: new () => BMapGeocoder;
 }
 
 declare global {
