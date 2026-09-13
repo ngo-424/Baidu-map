@@ -16,6 +16,11 @@
     {"id":"wrong-metric","value":500,"measured":"straight_line","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":0},"expected":null},
     {"id":"unknown-distance","value":null,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":0},"expected":null},
     {"id":"straight-explicit","value":500,"measured":"straight_line","rule":{"metric":"straight_line","inclusive":true,"tolerance_m":0},"expected":true},
-    {"id":"tolerance-unknown","value":1000.1,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":1},"expected":null}
+    {"id":"tolerance-unknown","value":1000.1,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":1},"expected":null},
+    {"id":"confirmed-tolerance-inside","value":899,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":100},"expected":true},
+    {"id":"confirmed-tolerance-lower-edge","value":900,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":100},"expected":null},
+    {"id":"confirmed-tolerance-exact","value":1000,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":100},"expected":true},
+    {"id":"confirmed-tolerance-upper-edge","value":1100,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":100},"expected":null},
+    {"id":"confirmed-tolerance-outside","value":1101,"measured":"walking_route","rule":{"metric":"walking_route","inclusive":true,"tolerance_m":100},"expected":false}
   ]
 }
