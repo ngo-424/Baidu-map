@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import time
 
 import httpx
@@ -55,9 +56,25 @@ class BaiduProvider:
     def _endpoint(value):
         if not isinstance(value, dict):
             return None
-        point = (value.get("lng"), value.get("lat"))
-        if not all(type(v) in (int, float) and math.isfinite(v) for v in point):
-            return None
+        coordinates = []
+        for axis in ("lng", "lat"):
+            component = value.get(axis)
+            # Real walking steps also encode coordinates as decimal strings.
+            # Do not accept bools, nonfinite literals or Python-only syntax.
+            if type(component) is str:
+                component = component.strip()
+                if len(component) > 64 or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", component):
+                    return None
+            elif type(component) not in (int, float):
+                return None
+            try:
+                component = float(component)
+            except (ValueError, OverflowError):
+                return None
+            if not math.isfinite(component):
+                return None
+            coordinates.append(component)
+        point = tuple(coordinates)
         try:
             normalize(point)
         except ValueError:

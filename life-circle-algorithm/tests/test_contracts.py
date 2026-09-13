@@ -1,4 +1,6 @@
 import asyncio
+
+
 import math
 
 import pytest
@@ -34,6 +36,26 @@ class StubProvider:
     async def query_walking_time(self, origin, destination, deadline):
         self.calls.append(destination)
         return RouteObservation(destination, self.duration, self.reason)
+
+
+def test_scheduler_rechecks_time_after_early_wakeup():
+    class EarlyClock:
+        now = 100.0
+        def time(self): return self.now
+        async def sleep(self, delay):
+            self.now += delay - .01 if delay > .02 else delay
+    async def run():
+        clock, sends = EarlyClock(), []
+        class Provider:
+            network = True
+            identity = ('early-wakeup-test',)
+            async def query_walking_time(self, origin, destination, deadline):
+                sends.append(clock.time())
+                return RouteObservation(destination, 100)
+        scheduler = Scheduler(IsochroneRequest((116.4,39.9), 'bd09ll', qps=3, concurrency=1), Provider(), CancelToken(), clock=clock)
+        await scheduler.observe_many([(116.401+i*.001,39.9) for i in range(5)])
+        assert len(sends) == 5 and all(b-a >= 1/3-1e-9 for a,b in zip(sends,sends[1:]))
+    asyncio.run(run())
 
 
 def test_ut01_coordinates():
