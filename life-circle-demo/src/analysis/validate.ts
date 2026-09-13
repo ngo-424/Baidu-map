@@ -26,6 +26,7 @@ export function validTask(v: unknown): v is TaskStatus {
 export function validResult(v: unknown): v is AnalysisResult {
   if (!object(v) || typeof v.taskId !== 'string' || !v.taskId || !source(v.dataSource)
     || !object(v.center) || !point([v.center.lng, v.center.lat]) || !finite(v.generatedAt)
+    || v.generatedAt < 0 || !Number.isFinite(new Date(v.generatedAt * 1000).getTime())
     || v.facilitiesStatus !== 'not_integrated' || !object(v.isochrone)) return false;
   const r = v.isochrone;
   if (r.coordinateSystem !== 'bd09ll' || !(r.geometry === null || geometry(r.geometry))
@@ -37,5 +38,7 @@ export function validResult(v: unknown): v is AnalysisResult {
   return count(s.requests) && count(s.network_requests) && count(s.retries) && count(s.unfinished_boundary)
     && finite(s.total_seconds) && s.total_seconds >= 0 && finite(s.unknown_area) && s.unknown_area >= 0
     && object(s.failures) && Object.values(s.failures).every(count)
-    && point(r.config.origin) && [200, 400, 800].includes(r.config.budget as number) && count(r.config.seed);
+    && point(r.config.origin) && (r.config.origin as number[])[0] === v.center.lng
+    && (r.config.origin as number[])[1] === v.center.lat
+    && [200, 400, 800].includes(r.config.budget as number) && count(r.config.seed);
 }

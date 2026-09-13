@@ -1,5 +1,6 @@
 import type { AnalysisInput, AnalysisService, AnalysisState, TaskStatus } from './types';
 import { ApiError } from './service';
+import { matchesAnalysisInput } from './adapter';
 
 type Run = { input: AnalysisInput; id?: string; abort: AbortController; revision: number; expired?: boolean; creationFailed?: boolean };
 function pause(signal: AbortSignal) {
@@ -71,6 +72,10 @@ export class AnalysisController {
     if (!this.current(run) || run.abort.signal.aborted) return true;
     if (task.status === 'completed') {
       const result = await this.api.result(run.id!, run.abort.signal);
+      if (!this.current(run) || run.abort.signal.aborted) return true;
+      if (result.taskId !== run.id || result.dataSource !== task.dataSource || !matchesAnalysisInput(result, run.input)) {
+        throw new Error('分析结果与提交条件不一致，请检查服务版本');
+      }
       if (this.current(run) && !run.abort.signal.aborted) this.set({ phase: 'completed', task, result });
       return true;
     }
