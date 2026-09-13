@@ -46,7 +46,7 @@ async function setup(page: Page, options: { failOnce?: boolean; unavailable?: bo
       return route.fulfill({ json: result });
     }
     return route.fulfill({ status: route.request().method() === 'POST' ? 202 : 200,
-      json: { taskId, status: 'completed', stage: 'completed', requests: 200, networkRequests: 0,
+      json: { schema_version: '1.0', responseType: 'task', businessStatus: 'partial', taskId, status: 'completed', stage: 'completed', requests: 200, networkRequests: 0,
         budget: submitted.budget, elapsedSeconds: 1, dataSource: 'synthetic', error: null } });
   });
 }
