@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Checkbox, InputNumber, Select, Space, Tag } from 'antd';
+import { Alert, Button, Card, Checkbox, Drawer, InputNumber, Select, Space, Tag } from 'antd';
 import type { Center } from '../types';
 import { createApiService } from './service';
 import { AnalysisController } from './controller';
-import type { AnalysisState, Budget, Isochrone } from './types';
+import type { AnalysisResult, AnalysisState, Budget, Isochrone } from './types';
 import { ApiMap, type Layers } from './ApiMap';
 import { LocationControls } from './LocationControls';
 import { geometryMessage } from './geometry';
+import { analysisAvailability } from './adapter';
+import { AnalysisReport } from './AnalysisReport';
 import './api.css';
 import { FacilityPanel } from './FacilityPanel';
 
@@ -44,6 +46,9 @@ export default function ApiApp() {
   const [showAssessments,setShowAssessments] = useState(true);
   const [route,setRoute] = useState<{taskId:string;points:[number,number][]}|null>(null);
   const [state, setState] = useState<AnalysisState>({ phase: 'idle' });
+  const [lastResult, setLastResult] = useState<AnalysisResult>();
+  const [dirty, setDirty] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [layers, setLayers] = useState<Layers>({ reachable: true, unknown: true, uncertain: true, extent: false, serviceBlind: true });
   const controller = useRef<AnalysisController | null>(null);
   useEffect(() => {
@@ -51,13 +56,24 @@ export default function ApiApp() {
     controller.current = instance;
     return () => { instance.dispose(); controller.current = null; };
   }, []);
+  useEffect(() => {
+    if (state.phase !== 'completed' || !state.result || analysisAvailability(state.result) === 'unavailable') return;
+    setLastResult(state.result);
+    setDirty(false);
+    setReportOpen(true);
+  }, [state.phase, state.result]);
+  const displayedResult = state.result ?? lastResult;
+  const unavailable = !!state.result && analysisAvailability(state.result) === 'unavailable';
+  const lastAttemptFailed = state.phase === 'error' || unavailable;
   const busy = ['submitting', 'running', 'cancelling'].includes(state.phase);
   const valid = lng !== null && lat !== null && Number.isFinite(lng) && Number.isFinite(lat) && lng >= -180 && lng <= 180 && lat > -85 && lat < 85;
   function choose(next: Center) {
+    setDirty(true);
     void controller.current?.reset();
     setCenter(next); setLng(next.lng); setLat(next.lat);
   }
   function edit(axis: 'lng' | 'lat', value: number | null) {
+    setDirty(true);
     void controller.current?.reset();
     if (axis === 'lng') setLng(value); else setLat(value);
   }
@@ -75,7 +91,7 @@ export default function ApiApp() {
           <LocationControls center={center} onPick={choose} />
           <label className="api-label">经度<InputNumber aria-label="经度" value={lng} onChange={value => edit('lng', value)} precision={6} /></label>
           <label className="api-label">纬度<InputNumber aria-label="纬度" value={lat} onChange={value => edit('lat', value)} precision={6} /></label>
-          <label className="api-label">等时圈采样预算<Select aria-label="调用预算" value={budget} onChange={value => { void controller.current?.reset(); setBudget(value); }} options={[200, 400, 800].map(value => ({ value, label: `${value} 次` }))} /></label>
+          <label className="api-label">等时圈采样预算<Select aria-label="调用预算" value={budget} onChange={value => { setDirty(true); void controller.current?.reset(); setBudget(value); }} options={[200, 400, 800].map(value => ({ value, label: `${value} 次` }))} /></label>
           <p className="api-muted">步行阈值 900 秒 · 坐标系 BD09LL</p>
           {!valid && <Alert type="error" title="请输入有效坐标：经度 −180～180，纬度大于 −85 且小于 85" />}
           <Space wrap><Button type="primary" onClick={analyze} disabled={!valid || busy}>开始分析</Button>
@@ -87,16 +103,22 @@ export default function ApiApp() {
         <Checkbox checked={showAssessments} onChange={e=>setShowAssessments(e.target.checked)}>点位三态</Checkbox>
         {!state.result?.facilityAnalysis && <Alert type="info" title="设施统计尚未接入" description="真实步行分析结束后将继续检索设施并核对抽样点；合成模式只验证等时圈。" />}
       </section>
-      <section className="api-map-section"><ApiMap center={center} result={state.result?.isochrone} layers={layers} onPick={choose} minutes={minutes} facilities={showFacilities?(state.result?.data.facilities||[]).filter(f=>group==='all'||f.major_category===group):[]} assessments={showAssessments?(state.result?.facilityAnalysis?.assessments||[]).map(p=>({...p,categories:p.categories.filter(c=>group==='all'||c.category===group)})):[]} blindRegions={state.result?.facilityAnalysis?.serviceBlindRegions||{}} onFacility={id=>{setSelected(id);setRoute(null);}} route={route?.taskId===state.result?.taskId?route?.points:[]} /></section>
+      <section className="api-map-section">{lastResult && dirty && <Alert type="warning" title="条件已修改，需重新分析。旧结果仍属于原中心点和预算。" showIcon />}<ApiMap center={center} result={state.result?.isochrone} layers={layers} onPick={choose} minutes={minutes} facilities={showFacilities?(state.result?.data.facilities||[]).filter(f=>group==='all'||f.major_category===group):[]} assessments={showAssessments?(state.result?.facilityAnalysis?.assessments||[]).map(p=>({...p,categories:p.categories.filter(c=>group==='all'||c.category===group)})):[]} blindRegions={state.result?.facilityAnalysis?.serviceBlindRegions||{}} onFacility={id=>{setSelected(id);setRoute(null);}} route={route?.taskId===state.result?.taskId?route?.points:[]} /></section>
       <section className="api-results" aria-label="分析结果"><Card title="分析结果">
         {state.phase === 'idle' && <p className="api-muted">选择中心后开始分析。结果将展示可达区域及证据质量。</p>}
         {state.phase === 'submitting' && <p role="status">正在提交任务…</p>}
         {state.task && <div className="api-progress" role="status"><Tag color={state.task.dataSource === 'synthetic' ? 'orange' : 'green'}>{state.task.dataSource === 'synthetic' ? '合成数据 · 离线验收' : '百度步行数据'}</Tag><p>{stages[state.task.stage] || state.task.stage}</p><strong>{state.task.requests} / {state.task.budget} 次调用</strong><p>已用时 {state.task.elapsedSeconds.toFixed(1)} 秒</p></div>}
         {state.phase === 'cancelled' && <Alert title="任务已取消" type="info" />}
         {state.error && <Alert type="error" title={state.error} action={<Button aria-label="重试" size="small" onClick={() => void controller.current?.retry()}>重试</Button>} />}
-        {state.result && <><ResultSummary result={state.result.isochrone} /><p className="api-muted">结果中心：{state.result.center.lng.toFixed(6)}, {state.result.center.lat.toFixed(6)}<br />{new Date(state.result.generatedAt * 1000).toLocaleString('zh-CN')}</p><details><summary>查看机器可读结果</summary><pre>{JSON.stringify(state.result, null, 2)}</pre></details></>}
+        {lastResult && lastAttemptFailed && <Alert type="warning" title="本次分析未获得可用结果，仍可查看上一次报告。" />}
+        {unavailable && <Alert type="warning" title="本次步行证据不足，未生成新的体检报告。" />}
+        {displayedResult && <><ResultSummary result={displayedResult.isochrone} /><p className="api-muted">结果来源：{displayedResult.dataSource === 'synthetic' ? '合成时间场' : '百度步行数据'}<br />结果中心：{displayedResult.center.lng.toFixed(6)}, {displayedResult.center.lat.toFixed(6)}<br />{new Date(displayedResult.generatedAt * 1000).toLocaleString('zh-CN')}</p><details><summary>查看机器可读结果</summary><pre>{JSON.stringify(displayedResult, null, 2)}</pre></details></>}
+        <Button block disabled={!lastResult} onClick={() => setReportOpen(true)}>查看分析报告</Button>
       </Card>{state.result?.facilityAnalysis && <FacilityPanel key={state.result.taskId} result={state.result} group={group} onGroup={setGroup} selected={selected} onSelect={setSelected} onRoute={points=>setRoute({taskId:state.result!.taskId,points})}/>}</section>
     </main>
-    <footer className="api-footer">未知区域不代表不可达；设施三态仅针对实测采样点。保留查询范围、分页和未测点限制。</footer>
+    <footer className="api-footer">质量提示随采样证据展示；未知区域不代表不可达。设施判断仅代表有证据的采样点，不推断盲区面积。</footer>
+    <Drawer title="生活圈分析报告" open={reportOpen} onClose={() => setReportOpen(false)} size={680}>
+      {lastResult && <AnalysisReport result={lastResult} stale={dirty} lastAttemptFailed={lastAttemptFailed} />}
+    </Drawer>
   </div>;
 }

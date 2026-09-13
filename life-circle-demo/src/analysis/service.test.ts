@@ -1,9 +1,25 @@
 import { expect, it, vi } from 'vitest';
 import { createApiService } from './service';
+import { resultFixture } from './testFixtures';
 
 const task = { schema_version: '1.0', responseType: 'task', taskId: 'one', status: 'completed',
   businessStatus: 'partial', stage: 'completed', requests: 200, networkRequests: 0, budget: 200,
   elapsedSeconds: 1, dataSource: 'synthetic', error: null };
+
+it('adapts valid HTTP results and strips unknown top-level fields', async () => {
+  const body = { ...resultFixture(), extra: 'not part of the frontend contract' };
+  const api = createApiService('', async () => new Response(JSON.stringify(body)));
+  expect(await api.result('one')).toEqual(resultFixture());
+});
+
+it('uses same-origin API paths when no base URL is configured', async () => {
+  vi.stubEnv('VITE_API_BASE_URL', '');
+  try {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(task)));
+    await createApiService(undefined, fetcher).status('one');
+    expect(fetcher.mock.calls[0][0]).toBe('/api/analyses/one');
+  } finally { vi.unstubAllEnvs(); }
+});
 
 it('sends BD09 requests and propagates an abort signal for polling', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(task), { status: 200 }));

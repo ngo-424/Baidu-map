@@ -108,6 +108,11 @@ async function analyze(page: Page, lng = '116.404') {
   await page.getByRole('button', { name: '开始分析', exact: true }).click();
   const result = await (await response).json();
   await expect(page.getByText('分析完成', { exact: true })).toBeVisible();
+  if (result.isochrone.quality !== 'insufficient' && result.isochrone.geometry !== null) {
+    await expect(page.getByTestId('analysis-report')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('analysis-report')).not.toBeVisible();
+  }
   return result;
 }
 
@@ -180,7 +185,7 @@ test('SDK failure keeps coordinate analysis and summary usable without demo fall
   await page.goto('/');
   await expect(page.getByText('地图不可用', { exact: true })).toBeVisible();
   await analyze(page);
-  await expect(page.getByText(/已重建 \d+ 个可达分量/)).toBeVisible();
+  await expect(page.getByRole('region', { name: '分析结果', exact: true }).getByText(/已重建 \d+ 个可达分量/)).toBeVisible();
   await expect(page.getByText('演示数据', { exact: true })).not.toBeVisible();
 });
 
@@ -192,6 +197,41 @@ test('network failure is explicit and can resume the same analysis request', asy
   await expect(page.getByText('无法连接后端或请求超时，请检查服务后重试', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '重试', exact: true }).click();
   await expect(page.getByText('分析完成', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('analysis-report')).toBeVisible();
+});
+
+test('reports retain their original conditions after edits, unavailable results and failed retries', async ({ page }) => {
+  await mockMap(page);
+  await page.goto('/');
+  await analyze(page);
+  await page.getByRole('button', { name: '查看分析报告', exact: true }).click();
+  const report = page.getByTestId('analysis-report');
+  await expect(report).toContainText('116.404000, 39.915000');
+  await expect(report).toContainText('合成时间场（非真实社区）');
+  await expect(page.getByTestId('analysis-facility-stats').getByRole('cell', { name: '无法确定', exact: true })).toHaveCount(3);
+  await expect(report).toContainText('设施盲区数量：无法确定');
+  await page.keyboard.press('Escape');
+  await analyze(page, '116.407');
+  await expect(page.getByText('本次步行证据不足，未生成新的体检报告。', { exact: true })).toBeVisible();
+  await expect(report).not.toBeVisible();
+  await page.getByRole('button', { name: '查看分析报告', exact: true }).click();
+  await expect(report).toContainText('116.404000, 39.915000');
+  await expect(report).toContainText('分析条件已修改');
+  await expect(report).toContainText('最近一次分析未成功');
+  await page.keyboard.press('Escape');
+  await page.getByRole('spinbutton', { name: '经度', exact: true }).fill('116.406');
+  await page.route('**/api/analyses', route => route.fulfill({ status: 503, body: '{}' }), { times: 1 });
+  await page.getByRole('button', { name: '开始分析', exact: true }).click();
+  await expect(page.getByText('后端步行服务未就绪，请检查 AK 和 QPS 配置', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '查看分析报告', exact: true }).click();
+  await expect(report).toContainText('116.404000, 39.915000');
+  await expect(report).toContainText('最近一次分析未成功');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '重试', exact: true }).click();
+  await expect(report).toBeVisible();
+  await expect(report).toContainText('116.406000, 39.915000');
+  await expect(report).not.toContainText('分析条件已修改');
+  await expect(report).not.toContainText('最近一次分析未成功');
 });
 
 test('lost create response can be cancelled by request key after editing center', async ({ page, request }) => {
