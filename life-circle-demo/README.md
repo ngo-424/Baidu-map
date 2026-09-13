@@ -9,10 +9,18 @@
 ## 配置与模式
 
 - `VITE_ANALYSIS_MODE=api`：默认，调用后端；`demo`：显式启用原设施模拟演示。
-- `VITE_API_BASE_URL`：默认 `http://127.0.0.1:8000`。
+- `VITE_API_BASE_URL`：未配置时使用同源 `/api/analyses`；本地前后端分端口运行时，请显式设为 `http://127.0.0.1:8000`。部署地址由环境配置提供。
 - `VITE_BAIDU_MAP_AK`：浏览器地图 AK，与后端步行 AK 分开配置。API 模式中地图缺配置或加载失败会显示错误，坐标输入与结果摘要仍可使用。
 - 可复制 `.env.example` 为本地 `.env.local` 并重启 Vite；不要在任何 `VITE_*` 中填写服务端 AK。
 - API 入口支持 200/400/800 次预算，每秒轮询；没有模拟进度动画和预设设施结论。后台忙时稍后重试，任务过期时重新分析。
+
+## 分析结果与报告
+
+默认 API 入口沿用 `/api/analyses` 创建、轮询、结果及取消接口。响应先经过运行时校验和显式适配，再核对任务、数据来源、中心点和预算，进入已有地理 `AnalysisResult`。不会将 BD09LL 结果强转为 Demo 平面坐标；多分量、孔洞、空几何和 null 均保留。
+
+获得可用或部分等时圈后自动打开分析报告；关闭后可通过“查看分析报告”重新打开。修改坐标或预算后，旧结果与报告保留并显示原条件提示；失败、服务不可用或证据不足不会覆盖上一份可用报告。地图继续展示实际返回的可达、未知、不确定及计算范围图层，报告不受图层开关影响。API 入口使用真实任务进度；原 Demo 的 Loading、Report MVP 与 DemoMap fallback 保持原流程。
+
+当前后端固定返回 `facilitiesStatus: "not_integrated"`，设施检索、设施计数和 1 公里服务盲区尚未接入。整份体检只能标为部分结果，三类设施数量和盲区数量均为“无法确定”；不能把算法未知区域当成设施盲区，也不会从 Demo 补数据。报告来源明确区分 `synthetic` 和 `baidu_walking`。`/api/v1/analysis/mock/*` 和 `/synthetic` 是另一套契约验收接口，不作为任务 API 的备用数据源。
 
 ## 本地运行
 
@@ -32,6 +40,7 @@ npm run dev
 ```powershell
 npm test
 npm run build
+npm run test:analysis-ui # 前端 HTTP 契约/地图替身回归，无需 Python 或真实 AK
 npm run test:integration  # 真实 FastAPI + 合成 Provider + 模拟 SDK，禁止外部网络
 npm run test:e2e          # 原演示入口回归
 ```

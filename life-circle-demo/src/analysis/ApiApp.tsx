@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Checkbox, InputNumber, Select, Space, Tag } from 'antd';
+import { Alert, Button, Card, Checkbox, Drawer, InputNumber, Select, Space, Tag } from 'antd';
 import type { Center } from '../types';
 import { createApiService } from './service';
 import { AnalysisController } from './controller';
-import type { AnalysisState, Budget, Isochrone } from './types';
+import type { AnalysisResult, AnalysisState, Budget, Isochrone } from './types';
 import { ApiMap, type Layers } from './ApiMap';
 import { geometryMessage } from './geometry';
+import { analysisAvailability } from './adapter';
+import { AnalysisReport } from './AnalysisReport';
 import './api.css';
 
 const stages: Record<string, string> = { initializing: '初始化采样', expanding: '检查并扩展范围', exploring: '探索采样', refining: '边界细化与补测', reconstructing: '重建时间场与几何', completed: '分析完成', cancelled: '已取消', cancelling: '正在取消', failed: '分析失败' };
@@ -34,6 +36,9 @@ export default function ApiApp() {
   const [lat, setLat] = useState<number | null>(39.915);
   const [budget, setBudget] = useState<Budget>(400);
   const [state, setState] = useState<AnalysisState>({ phase: 'idle' });
+  const [lastResult, setLastResult] = useState<AnalysisResult>();
+  const [dirty, setDirty] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [layers, setLayers] = useState<Layers>({ reachable: true, unknown: true, uncertain: true, extent: false });
   const controller = useRef<AnalysisController | null>(null);
   useEffect(() => {
@@ -41,13 +46,24 @@ export default function ApiApp() {
     controller.current = instance;
     return () => { instance.dispose(); controller.current = null; };
   }, []);
+  useEffect(() => {
+    if (state.phase !== 'completed' || !state.result || analysisAvailability(state.result) === 'unavailable') return;
+    setLastResult(state.result);
+    setDirty(false);
+    setReportOpen(true);
+  }, [state.phase, state.result]);
+  const displayedResult = state.result ?? lastResult;
+  const unavailable = !!state.result && analysisAvailability(state.result) === 'unavailable';
+  const lastAttemptFailed = state.phase === 'error' || unavailable;
   const busy = ['submitting', 'running', 'cancelling'].includes(state.phase);
   const valid = lng !== null && lat !== null && Number.isFinite(lng) && Number.isFinite(lat) && lng >= -180 && lng <= 180 && lat > -85 && lat < 85;
   function choose(next: Center) {
+    setDirty(true);
     void controller.current?.reset();
     setCenter(next); setLng(next.lng); setLat(next.lat);
   }
   function edit(axis: 'lng' | 'lat', value: number | null) {
+    setDirty(true);
     void controller.current?.reset();
     if (axis === 'lng') setLng(value); else setLat(value);
   }
@@ -64,7 +80,7 @@ export default function ApiApp() {
         <Card title="选择分析中心"><p className="api-muted">在地图上选点，或输入百度坐标。默认坐标仅用于选点起始位置，尚未进行社区实验验证。</p>
           <label className="api-label">经度<InputNumber aria-label="经度" value={lng} onChange={value => edit('lng', value)} precision={6} /></label>
           <label className="api-label">纬度<InputNumber aria-label="纬度" value={lat} onChange={value => edit('lat', value)} precision={6} /></label>
-          <label className="api-label">调用预算<Select aria-label="调用预算" value={budget} onChange={value => { void controller.current?.reset(); setBudget(value); }} options={[200, 400, 800].map(value => ({ value, label: `${value} 次` }))} /></label>
+          <label className="api-label">调用预算<Select aria-label="调用预算" value={budget} onChange={value => { setDirty(true); void controller.current?.reset(); setBudget(value); }} options={[200, 400, 800].map(value => ({ value, label: `${value} 次` }))} /></label>
           <p className="api-muted">步行阈值 900 秒 · 坐标系 BD09LL</p>
           {!valid && <Alert type="error" title="请输入有效坐标：经度 −180～180，纬度大于 −85 且小于 85" />}
           <Space wrap><Button type="primary" onClick={analyze} disabled={!valid || busy}>开始分析</Button>
@@ -73,16 +89,25 @@ export default function ApiApp() {
         <Card title="地图图层"><div className="api-layer-list">{([['reachable', '可达区域'], ['unknown', '未知区域'], ['uncertain', '不确定区域'], ['extent', '计算范围']] as const).map(([key, label]) => <Checkbox key={key} checked={layers[key]} onChange={event => setLayers({ ...layers, [key]: event.target.checked })}><i className={`api-swatch ${key}`} />{label}</Checkbox>)}</div></Card>
         <Alert type="info" title="设施统计尚未接入" description="本轮只计算步行等时圈，不提供设施数量、服务覆盖率或设施盲区结论。" />
       </section>
-      <section className="api-map-section"><ApiMap center={center} result={state.result?.isochrone} layers={layers} onPick={choose} /></section>
+      <section className="api-map-section">
+        {lastResult && dirty && <Alert type="warning" title="条件已修改，需重新分析。旧结果仍属于原中心点和预算。" showIcon />}
+        <ApiMap center={center} result={displayedResult?.isochrone} layers={layers} onPick={choose} />
+      </section>
       <section className="api-results" aria-label="分析结果"><Card title="分析结果">
         {state.phase === 'idle' && <p className="api-muted">选择中心后开始分析。结果将展示可达区域及证据质量。</p>}
         {state.phase === 'submitting' && <p role="status">正在提交任务…</p>}
         {state.task && <div className="api-progress" role="status"><Tag color={state.task.dataSource === 'synthetic' ? 'orange' : 'green'}>{state.task.dataSource === 'synthetic' ? '合成数据 · 离线验收' : '百度步行数据'}</Tag><p>{stages[state.task.stage] || state.task.stage}</p><strong>{state.task.requests} / {state.task.budget} 次调用</strong><p>已用时 {state.task.elapsedSeconds.toFixed(1)} 秒</p></div>}
         {state.phase === 'cancelled' && <Alert title="任务已取消" type="info" />}
         {state.error && <Alert type="error" title={state.error} action={<Button aria-label="重试" size="small" onClick={() => void controller.current?.retry()}>重试</Button>} />}
-        {state.result && <><ResultSummary result={state.result.isochrone} /><p className="api-muted">结果中心：{state.result.center.lng.toFixed(6)}, {state.result.center.lat.toFixed(6)}<br />{new Date(state.result.generatedAt * 1000).toLocaleString('zh-CN')}</p><details><summary>查看机器可读结果</summary><pre>{JSON.stringify(state.result, null, 2)}</pre></details></>}
+        {lastResult && lastAttemptFailed && <Alert type="warning" title="本次分析未获得可用结果，仍可查看上一次报告。" />}
+        {unavailable && <Alert type="warning" title="本次步行证据不足，未生成新的体检报告。" />}
+        {displayedResult && <><ResultSummary result={displayedResult.isochrone} /><p className="api-muted">结果来源：{displayedResult.dataSource === 'synthetic' ? '合成时间场' : '百度步行数据'}<br />结果中心：{displayedResult.center.lng.toFixed(6)}, {displayedResult.center.lat.toFixed(6)}<br />{new Date(displayedResult.generatedAt * 1000).toLocaleString('zh-CN')}</p><details><summary>查看机器可读结果</summary><pre>{JSON.stringify(displayedResult, null, 2)}</pre></details></>}
+        <Button block disabled={!lastResult} onClick={() => setReportOpen(true)}>查看分析报告</Button>
       </Card></section>
     </main>
     <footer className="api-footer">质量提示随采样证据展示；未知区域不代表不可达。真实社区实验将在下一阶段开展。</footer>
+    <Drawer title="生活圈分析报告" open={reportOpen} onClose={() => setReportOpen(false)} size={680}>
+      {lastResult && <AnalysisReport result={lastResult} stale={dirty} lastAttemptFailed={lastAttemptFailed} />}
+    </Drawer>
   </div>;
 }

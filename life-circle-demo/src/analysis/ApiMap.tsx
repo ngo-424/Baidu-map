@@ -9,25 +9,30 @@ export type Layers = { reachable: boolean; unknown: boolean; uncertain: boolean;
 export function ApiMap({ center, result, layers, onPick }: { center: Center; result?: Isochrone; layers: Layers; onPick: (center: Center) => void }) {
   const { api, mode, failureReason } = useBaiduMap();
   const container = useRef<HTMLDivElement>(null);
-  const map = useRef<BMapMap | null>(null);
+  const [map, setMap] = useState<BMapMap | null>(null);
   const pick = useRef(onPick);
   pick.current = onPick;
   const initialCenter = useRef(center);
+  initialCenter.current = center;
   const [error, setError] = useState(false);
   useEffect(() => {
     if (!api || !container.current) return;
     let instance: BMapMap | undefined;
-    try {
-      instance = new api.Map(container.current);
-      map.current = instance;
-      instance.centerAndZoom(new api.Point(initialCenter.current.lng, initialCenter.current.lat), 15);
-      instance.enableScrollWheelZoom(true);
-      instance.addEventListener('click', event => pick.current({ lng: +event.latlng.lng.toFixed(6), lat: +event.latlng.lat.toFixed(6) }));
-    } catch { setError(true); }
-    return () => { instance?.destroy?.(); map.current = null; };
+    const el = container.current;
+    // Match BaiduMapView: cancel StrictMode's trial setup before the SDK starts async work.
+    const frame = requestAnimationFrame(() => {
+      try {
+        instance = new api.Map(el);
+        instance.centerAndZoom(new api.Point(initialCenter.current.lng, initialCenter.current.lat), 15);
+        instance.enableScrollWheelZoom(true);
+        instance.addEventListener('click', event => pick.current({ lng: +event.latlng.lng.toFixed(6), lat: +event.latlng.lat.toFixed(6) }));
+        setMap(instance);
+      } catch { setError(true); }
+    });
+    return () => { cancelAnimationFrame(frame); instance?.destroy?.(); };
   }, [api]);
   useEffect(() => {
-    const instance = map.current;
+    const instance = map;
     if (!instance || !api) return;
     try {
       instance.clearOverlays();
@@ -40,7 +45,7 @@ export function ApiMap({ center, result, layers, onPick }: { center: Center; res
       }
       instance.addOverlay(new api.Marker(new api.Point(center.lng, center.lat), { title: '分析中心（BD09LL）' }));
     } catch { setError(true); }
-  }, [api, center, result, layers]);
+  }, [api, map, center, result, layers]);
   const unavailable = error || mode === 'fallback';
   const failureMessage = failureReason === 'missing-key'
     ? '尚未配置浏览器地图密钥，请联系项目管理员完成地图配置。仍可输入坐标、执行分析和查看结果摘要。'
