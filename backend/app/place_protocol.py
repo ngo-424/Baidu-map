@@ -48,8 +48,12 @@ class Pagination:
         """Return a stop reason, or None to schedule the next page."""
         rows = payload["results"]
         total = payload.get("total")
+        if total is not None and (type(total) is not int or total < 0):
+            self.warnings.append("pagination_uncertain")
         total = total if type(total) is int and total >= 0 else None
-        fingerprint = hashlib.sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        identities = [str(row['uid']) if isinstance(row, dict) and isinstance(row.get('uid'), str)
+                      else json.dumps(row, sort_keys=True, ensure_ascii=False) for row in rows]
+        fingerprint = hashlib.sha256(json.dumps(sorted(identities), ensure_ascii=False).encode()).hexdigest()
         self.pages += 1
         self.returned += len(rows)
         if rows and fingerprint in self.fingerprints:
