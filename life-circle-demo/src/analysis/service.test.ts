@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest';
 import { createApiService } from './service';
 
-const task = { taskId: 'one', status: 'completed', stage: 'completed', requests: 200,
-  networkRequests: 0, budget: 200, elapsedSeconds: 1, dataSource: 'synthetic', error: null };
+const task = { schema_version: '1.0', responseType: 'task', taskId: 'one', status: 'completed',
+  businessStatus: 'partial', stage: 'completed', requests: 200, networkRequests: 0, budget: 200,
+  elapsedSeconds: 1, dataSource: 'synthetic', error: null };
 
 it('sends BD09 requests and propagates an abort signal for polling', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(task), { status: 200 }));

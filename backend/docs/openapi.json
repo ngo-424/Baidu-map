@@ -27,7 +27,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
               }
             }
           },
@@ -67,7 +69,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
               }
             }
           },
@@ -107,7 +111,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
               }
             }
           },
@@ -147,7 +153,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResultResponse"
+                }
               }
             }
           },
@@ -187,7 +195,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
               }
             }
           },
@@ -504,10 +514,32 @@
             "type": "string",
             "enum": [
               "market",
+              "supermarket",
               "pharmacy",
+              "hospital_pharmacy",
               "school"
             ],
             "title": "Category"
+          },
+          "major_category": {
+            "type": "string",
+            "enum": [
+              "shopping",
+              "medical",
+              "education"
+            ],
+            "title": "Major Category"
+          },
+          "minor_category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "supermarket",
+              "pharmacy",
+              "hospital_pharmacy",
+              "school"
+            ],
+            "title": "Minor Category"
           },
           "status": {
             "type": "string",
@@ -528,6 +560,8 @@
         "required": [
           "location",
           "category",
+          "major_category",
+          "minor_category",
           "status",
           "evidence"
         ],
@@ -539,10 +573,32 @@
             "type": "string",
             "enum": [
               "market",
+              "supermarket",
               "pharmacy",
+              "hospital_pharmacy",
               "school"
             ],
             "title": "Category"
+          },
+          "major_category": {
+            "type": "string",
+            "enum": [
+              "shopping",
+              "medical",
+              "education"
+            ],
+            "title": "Major Category"
+          },
+          "minor_category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "supermarket",
+              "pharmacy",
+              "hospital_pharmacy",
+              "school"
+            ],
+            "title": "Minor Category"
           },
           "query_status": {
             "type": "string",
@@ -579,6 +635,8 @@
         "type": "object",
         "required": [
           "category",
+          "major_category",
+          "minor_category",
           "query_status",
           "count_in_circle",
           "service_status"
@@ -767,7 +825,8 @@
             "type": "string",
             "enum": [
               "unconfirmed",
-              "per_category"
+              "per_category",
+              "major_minor"
             ],
             "title": "Category Policy",
             "default": "unconfirmed"
@@ -791,10 +850,32 @@
             "type": "string",
             "enum": [
               "market",
+              "supermarket",
               "pharmacy",
+              "hospital_pharmacy",
               "school"
             ],
             "title": "Category"
+          },
+          "major_category": {
+            "type": "string",
+            "enum": [
+              "shopping",
+              "medical",
+              "education"
+            ],
+            "title": "Major Category"
+          },
+          "minor_category": {
+            "type": "string",
+            "enum": [
+              "market",
+              "supermarket",
+              "pharmacy",
+              "hospital_pharmacy",
+              "school"
+            ],
+            "title": "Minor Category"
           },
           "location": {
             "$ref": "#/components/schemas/Origin"
@@ -817,6 +898,8 @@
           "id",
           "name",
           "category",
+          "major_category",
+          "minor_category",
           "location",
           "in_circle"
         ],
@@ -1019,6 +1102,252 @@
           "coordinate_system"
         ],
         "title": "SyntheticRequest"
+      },
+      "TaskResultResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.0",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "responseType": {
+            "type": "string",
+            "const": "result",
+            "title": "Responsetype",
+            "default": "result"
+          },
+          "taskId": {
+            "type": "string",
+            "title": "Taskid"
+          },
+          "taskStatus": {
+            "type": "string",
+            "const": "completed",
+            "title": "Taskstatus"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "failed",
+              "empty"
+            ],
+            "title": "Status"
+          },
+          "businessStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "failed",
+              "empty"
+            ],
+            "title": "Businessstatus"
+          },
+          "dataSource": {
+            "type": "string",
+            "enum": [
+              "synthetic",
+              "baidu_walking"
+            ],
+            "title": "Datasource"
+          },
+          "center": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "generatedAt": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Generatedat"
+          },
+          "facilitiesStatus": {
+            "type": "string",
+            "const": "not_integrated",
+            "title": "Facilitiesstatus"
+          },
+          "coordinateSystem": {
+            "type": "string",
+            "const": "bd09ll",
+            "title": "Coordinatesystem",
+            "default": "bd09ll"
+          },
+          "coordinateOrder": {
+            "type": "string",
+            "const": "longitude,latitude",
+            "title": "Coordinateorder",
+            "default": "longitude,latitude"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Units"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/Rules"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Data"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "isochrone": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Isochrone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskStatus",
+          "status",
+          "businessStatus",
+          "dataSource",
+          "center",
+          "generatedAt",
+          "facilitiesStatus",
+          "isochrone"
+        ],
+        "title": "TaskResultResponse",
+        "description": "异步结果与旧地理分析契约共享坐标、单位和数据语义。"
+      },
+      "TaskStatusResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.0",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "responseType": {
+            "type": "string",
+            "const": "task",
+            "title": "Responsetype",
+            "default": "task"
+          },
+          "taskId": {
+            "type": "string",
+            "title": "Taskid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "cancelling",
+              "completed",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "businessStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "failed",
+                  "empty"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Businessstatus"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Requests"
+          },
+          "networkRequests": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Networkrequests"
+          },
+          "budget": {
+            "type": "integer",
+            "enum": [
+              200,
+              400,
+              800
+            ],
+            "title": "Budget"
+          },
+          "elapsedSeconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Elapsedseconds"
+          },
+          "dataSource": {
+            "type": "string",
+            "enum": [
+              "synthetic",
+              "baidu_walking"
+            ],
+            "title": "Datasource"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "taskId",
+          "status",
+          "stage",
+          "requests",
+          "networkRequests",
+          "budget",
+          "elapsedSeconds",
+          "dataSource"
+        ],
+        "title": "TaskStatusResponse",
+        "description": "统一异步任务响应；business_status 是业务结果，status 是传输任务状态。"
       },
       "ValidationError": {
         "properties": {

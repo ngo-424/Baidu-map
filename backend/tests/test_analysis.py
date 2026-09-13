@@ -55,6 +55,12 @@ def test_four_mocks_consistent(client):
         AnalysisResponse.model_validate(body)
         assert body["source"] == "mock"
         assert "ak=" not in json.dumps(body).lower()
+        for category in body["data"]["categories"]:
+            assert category["major_category"] in ("shopping", "medical", "education")
+            assert category["minor_category"] == category["category"]
+        for facility in body["data"]["facilities"] or []:
+            assert facility["major_category"] in ("shopping", "medical", "education")
+            assert facility["minor_category"] == facility["category"]
     assert bodies[2]["data"]["facilities"] is None
     assert bodies[3]["data"]["facilities"] == []
     assert bodies[1]["data"]["categories"][0]["count_in_circle"] is None

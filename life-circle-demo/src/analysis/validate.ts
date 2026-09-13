@@ -1,10 +1,12 @@
-import type { AnalysisResult, TaskStatus } from './types';
+import type { AnalysisResult, BusinessStatus, TaskStatus } from './types';
 
 type RecordValue = Record<string, unknown>;
 const object = (v: unknown): v is RecordValue => v !== null && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const count = (v: unknown) => finite(v) && Number.isInteger(v) && v >= 0;
 const source = (v: unknown) => v === 'synthetic' || v === 'baidu_walking';
+const businessStatus = (v: unknown): v is BusinessStatus =>
+  v === 'complete' || v === 'partial' || v === 'failed' || v === 'empty';
 const point = (v: unknown) => Array.isArray(v) && v.length === 2 && finite(v[0]) && finite(v[1])
   && v[0] >= -180 && v[0] <= 180 && v[1] > -85 && v[1] < 85;
 
@@ -17,7 +19,9 @@ function geometry(v: unknown): boolean {
 
 export function validTask(v: unknown): v is TaskStatus {
   return object(v) && typeof v.taskId === 'string' && v.taskId.length > 0
+    && v.schema_version === '1.0' && v.responseType === 'task'
     && ['running', 'cancelling', 'completed', 'cancelled', 'failed'].includes(v.status as string)
+    && (v.businessStatus === null || businessStatus(v.businessStatus))
     && typeof v.stage === 'string' && count(v.requests) && count(v.networkRequests)
     && [200, 400, 800].includes(v.budget as number) && finite(v.elapsedSeconds) && v.elapsedSeconds >= 0
     && source(v.dataSource) && (v.error === null || typeof v.error === 'string');
@@ -25,8 +29,12 @@ export function validTask(v: unknown): v is TaskStatus {
 
 export function validResult(v: unknown): v is AnalysisResult {
   if (!object(v) || typeof v.taskId !== 'string' || !v.taskId || !source(v.dataSource)
+    || v.schema_version !== '1.0' || v.responseType !== 'result' || v.taskStatus !== 'completed'
+    || !businessStatus(v.status) || !businessStatus(v.businessStatus) || v.status !== v.businessStatus
     || !object(v.center) || !point([v.center.lng, v.center.lat]) || !finite(v.generatedAt)
-    || v.facilitiesStatus !== 'not_integrated' || !object(v.isochrone)) return false;
+    || v.facilitiesStatus !== 'not_integrated' || v.coordinateSystem !== 'bd09ll'
+    || v.coordinateOrder !== 'longitude,latitude' || !object(v.units) || !object(v.rules)
+    || !object(v.data) || !object(v.isochrone)) return false;
   const r = v.isochrone;
   if (r.coordinateSystem !== 'bd09ll' || !(r.geometry === null || geometry(r.geometry))
     || !geometry(r.unknownRegion) || !geometry(r.uncertainRegion) || !geometry(r.computationExtent)

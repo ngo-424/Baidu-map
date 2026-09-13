@@ -17,6 +17,8 @@ from life_circle.models import CancelToken, IsochroneRequest, ProgressSnapshot, 
 from life_circle.providers import AnalyticProvider, BaiduProvider
 
 from .baidu import silence_transport_logs
+from .contracts import Data, Issue, Rules, TaskResultResponse, TaskStatusResponse, map_business_status
+from .rules import DistanceRule
 
 
 class Center(BaseModel):
@@ -60,14 +62,24 @@ class Job:
     finished_at: float | None = None
     task: asyncio.Task | None = None
 
+    def business_status(self):
+        if self.status == "failed":
+            return "failed"
+        if self.status != "completed" or not self.result:
+            return None
+        return self.result.get("businessStatus", "partial")
+
     def view(self):
-        return {"taskId": self.task_id, "status": self.status,
-                "stage": self.status if self.status in TERMINAL or self.status == "cancelling" else self.progress.stage if self.progress else "initializing",
-                "requests": self.progress.requests if self.progress else 0,
-                "networkRequests": self.progress.network_requests if self.progress else 0,
-                "budget": self.payload.budget,
-                "elapsedSeconds": max(0, (self.finished_at or time.monotonic()) - self.started),
-                "dataSource": self.data_source, "error": self.error}
+        return TaskStatusResponse(
+            task_id=self.task_id, status=self.status, business_status=self.business_status(),
+            stage=self.status if self.status in TERMINAL or self.status == "cancelling"
+            else self.progress.stage if self.progress else "initializing",
+            requests=self.progress.requests if self.progress else 0,
+            network_requests=self.progress.network_requests if self.progress else 0,
+            budget=self.payload.budget,
+            elapsed_seconds=max(0, (self.finished_at or time.monotonic()) - self.started),
+            data_source=self.data_source, error=self.error,
+        ).model_dump(by_alias=True)
 
 
 class RateGate:
@@ -167,9 +179,30 @@ class AnalysisManager:
             elif result.stop_reason == "geometry_error":
                 job.status, job.error = "failed", "几何重建失败，请重试或检查采样证据"
             else:
-                job.result = {"taskId": job.task_id, "dataSource": job.data_source,
-                    "center": {"lng": origin[0], "lat": origin[1]}, "generatedAt": time.time(),
-                    "facilitiesStatus": "not_integrated", "isochrone": result.to_dict()}
+                payload = result.to_dict()
+                # The current algorithm only supplies the isochrone.  The
+                # normalized business status therefore remains partial until
+                # facility/report modules are connected.  Insufficient evidence
+                # is a failed business result even though the async task ran.
+                business_status = map_business_status(quality=payload["quality"],
+                                                      facilities_status="not_integrated")
+                warnings = [Issue(code="ALGORITHM_WARNING", message=message,
+                                   scope="isochrone") for message in payload["warnings"]]
+                errors = ([Issue(code="INSUFFICIENT_EVIDENCE",
+                                 message="没有足够步行证据生成等时圈。", scope="isochrone", severity="error")]
+                           if business_status == "failed" else [])
+                job.result = TaskResultResponse(
+                    task_id=job.task_id, task_status="completed", status=business_status,
+                    business_status=business_status,
+                    data_source=job.data_source, center={"lng": origin[0], "lat": origin[1]},
+                    generated_at=time.time(), facilities_status="not_integrated",
+                    rules=Rules(distance=DistanceRule(metric="walking_route", threshold_m=1000,
+                        inclusive=True, tolerance_m=100, assessment_scope="isochrone",
+                        category_policy="major_minor")),
+                    data=Data(geometry=payload["geometry"], uncertain_region=payload["uncertainRegion"],
+                              unknown_region=payload["unknownRegion"], computation_extent=payload["computationExtent"]),
+                    algorithm=payload, warnings=warnings, errors=errors, isochrone=payload,
+                ).model_dump(by_alias=True)
                 job.status = "completed"
         except asyncio.CancelledError:
             job.token.cancel()
@@ -203,15 +236,15 @@ class AnalysisManager:
 def analysis_router(manager):
     router = APIRouter(prefix="/api/analyses", tags=["analyses"])
 
-    @router.post("", status_code=202)
+    @router.post("", status_code=202, response_model=TaskStatusResponse)
     async def create(payload: AnalysisInput):
         return manager.create(payload).view()
 
-    @router.get("/{task_id}")
+    @router.get("/{task_id}", response_model=TaskStatusResponse)
     async def status(task_id: str):
         return manager.get(task_id).view()
 
-    @router.post("/by-request/{client_request_id}/cancel", status_code=202)
+    @router.post("/by-request/{client_request_id}/cancel", status_code=202, response_model=TaskStatusResponse)
     async def cancel_by_request(client_request_id: str):
         # Recover a lost create response without replaying POST and starting new work.
         manager.prune()
@@ -220,14 +253,14 @@ def analysis_router(manager):
                 return manager.cancel(job).view()
         raise HTTPException(404, "任务不存在或已过期")
 
-    @router.get("/{task_id}/result")
+    @router.get("/{task_id}/result", response_model=TaskResultResponse)
     async def result(task_id: str):
         job = manager.get(task_id)
         if job.status != "completed":
             raise HTTPException(409, "任务尚未完成或没有可用结果")
         return job.result
 
-    @router.post("/{task_id}/cancel", status_code=202)
+    @router.post("/{task_id}/cancel", status_code=202, response_model=TaskStatusResponse)
     async def cancel(task_id: str):
         return manager.cancel(manager.get(task_id)).view()
 
