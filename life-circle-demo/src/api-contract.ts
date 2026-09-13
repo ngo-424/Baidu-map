@@ -109,6 +109,55 @@ export type TaskStatusResponse = {
   error: string | null;
 };
 
+export type AssessmentPoint = {
+  location: Origin;
+  duration_s: number;
+  categories: Array<CoverageEvidence>;
+};
+
+export type CoverageEvidence = {
+  category: "shopping" | "medical" | "education";
+  status: "covered" | "blind" | "unknown";
+  facility_id: string | null;
+  distance_m: number | null;
+  reason: string;
+};
+
+export type FacilityAnalysis = {
+  status: "complete" | "partial" | "failed";
+  queries: Array<QueryEvidence>;
+  assessments: Array<AssessmentPoint>;
+  candidate_points: number;
+  assessed_points: number;
+  unassessed_points: number;
+  network_requests: number;
+  elapsed_seconds: number;
+  search_radius_m: number;
+  routes: Record<string, RouteEvidence>;
+  serviceBlindRegions: Record<string, Geometry>;
+  warnings: Array<string>;
+};
+
+export type QueryEvidence = {
+  category: "market" | "supermarket" | "pharmacy" | "hospital_pharmacy" | "school";
+  query: string;
+  status: "complete" | "partial" | "failed" | "truncated";
+  pages: number;
+  returned: number;
+  excluded: number;
+  invalid: number;
+  total: number | null;
+  reason: string | null;
+};
+
+export type RouteEvidence = {
+  distance_m: number | null;
+  duration_s: number | null;
+  endpoint_verified: boolean;
+  reason: string | null;
+  path: Array<Array<number>>;
+};
+
 export type TaskResultResponse = {
   schema_version: "1.0";
   responseType: "result";
@@ -119,7 +168,8 @@ export type TaskResultResponse = {
   dataSource: "synthetic" | "baidu_walking";
   center: Origin;
   generatedAt: number;
-  facilitiesStatus: "not_integrated";
+  facilitiesStatus: "not_integrated" | "complete" | "partial" | "failed";
+  facilityAnalysis: FacilityAnalysis | null;
   coordinateSystem: "bd09ll";
   coordinateOrder: "longitude,latitude";
   units: Record<string, string>;

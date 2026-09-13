@@ -10,6 +10,8 @@ export type BusinessGeometry = {
 };
 export type TaskStatus = ContractTaskStatus;
 export type Isochrone = {
+  timeBands?: { minutes: number; geometry: BusinessGeometry | null }[];
+  unreachableRegion?: BusinessGeometry | null;
   coordinateSystem: 'bd09ll'; geometry: BusinessGeometry | null;
   uncertainRegion: BusinessGeometry; unknownRegion: BusinessGeometry; computationExtent: BusinessGeometry;
   quality: 'usable' | 'partial' | 'insufficient'; stopReason: string; warnings: string[];
@@ -17,7 +19,7 @@ export type Isochrone = {
     unfinished_boundary: number; total_seconds: number; failures: Record<string, number> };
   config: { origin: [number, number]; budget: number; seed: number; [key: string]: unknown };
 };
-export type AnalysisResult = Omit<ContractTaskResult, 'isochrone'> & { center: Center; isochrone: Isochrone };
+export type AnalysisResult = Omit<ContractTaskResult, 'isochrone' | 'facilityAnalysis'> & { center: Center; isochrone: Isochrone; facilityAnalysis?: ContractTaskResult['facilityAnalysis'] };
 export interface AnalysisService {
   create(input: AnalysisInput): Promise<TaskStatus>;
   status(id: string, signal?: AbortSignal): Promise<TaskStatus>;

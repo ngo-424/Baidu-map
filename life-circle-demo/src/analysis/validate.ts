@@ -32,10 +32,26 @@ export function validResult(v: unknown): v is AnalysisResult {
     || v.schema_version !== '1.0' || v.responseType !== 'result' || v.taskStatus !== 'completed'
     || !businessStatus(v.status) || !businessStatus(v.businessStatus) || v.status !== v.businessStatus
     || !object(v.center) || !point([v.center.lng, v.center.lat]) || !finite(v.generatedAt)
-    || v.facilitiesStatus !== 'not_integrated' || v.coordinateSystem !== 'bd09ll'
+    || !['not_integrated', 'complete', 'partial', 'failed'].includes(v.facilitiesStatus as string) || v.coordinateSystem !== 'bd09ll'
     || v.coordinateOrder !== 'longitude,latitude' || !object(v.units) || !object(v.rules)
     || !object(v.data) || !object(v.isochrone)) return false;
   const r = v.isochrone;
+  if (r.timeBands !== undefined && (!Array.isArray(r.timeBands) || !r.timeBands.every(b => object(b) && [5,10,15].includes(b.minutes as number) && (b.geometry === null || geometry(b.geometry))))) return false;
+  if (r.unreachableRegion !== undefined && r.unreachableRegion !== null && !geometry(r.unreachableRegion)) return false;
+  if (v.facilityAnalysis !== null && v.facilityAnalysis !== undefined) {
+    const a = v.facilityAnalysis;
+    if (!object(a) || !['complete','partial','failed'].includes(a.status as string)
+      || !count(a.candidate_points) || !count(a.assessed_points) || !count(a.unassessed_points) || !count(a.network_requests)
+      || !finite(a.elapsed_seconds) || !Array.isArray(a.warnings) || !a.warnings.every(w=>typeof w==='string')
+      || !Array.isArray(a.queries) || !a.queries.every(q=>object(q) && typeof q.query==='string' && ['complete','partial','failed','truncated'].includes(q.status as string))
+      || !Array.isArray(a.assessments) || !a.assessments.every(p=>object(p) && object(p.location) && point([p.location.lng,p.location.lat]) && finite(p.duration_s)
+        && Array.isArray(p.categories) && p.categories.every(c=>object(c) && ['shopping','medical','education'].includes(c.category as string) && ['covered','blind','unknown'].includes(c.status as string)))
+      || !object(a.routes) || !Object.values(a.routes).every(route=>object(route) && Array.isArray(route.path) && route.path.every(point))
+      || (a.serviceBlindRegions !== undefined && (!object(a.serviceBlindRegions) || !Object.values(a.serviceBlindRegions).every(g=>geometry(g))))
+      || !Array.isArray(v.data.facilities) || !v.data.facilities.every(f=>object(f) && typeof f.id==='string' && typeof f.name==='string' && ['shopping','medical','education'].includes(f.major_category as string)
+        && object(f.location) && point([f.location.lng,f.location.lat]) && (f.in_circle === null || typeof f.in_circle==='boolean'))
+      || typeof v.data.report !== 'string') return false;
+  } else if (v.facilitiesStatus !== 'not_integrated') return false;
   if (r.coordinateSystem !== 'bd09ll' || !(r.geometry === null || geometry(r.geometry))
     || !geometry(r.unknownRegion) || !geometry(r.uncertainRegion) || !geometry(r.computationExtent)
     || !['usable', 'partial', 'insufficient'].includes(r.quality as string)

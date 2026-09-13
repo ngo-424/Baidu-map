@@ -32,14 +32,17 @@ class BaiduProvider:
     network = True
     endpoint = "https://api.map.baidu.com/directionlite/v1/walking"
 
-    def __init__(self, ak=None, *, client=None, origin_uid=None, destination_uid=None):
+    def __init__(self, ak=None, *, client=None, origin_uid=None, destination_uid=None, route_metric="duration"):
         self._ak = ak or os.environ.get("BAIDU_MAP_AK")
         if not self._ak:
             raise ValueError("真实 Provider 需要设置 BAIDU_MAP_AK")
         self.client = client
         self._owns_client = client is None
         self.origin_uid, self.destination_uid = origin_uid, destination_uid
-        self.identity = ("baidu", "directionlite/v1/walking", "bd09ll", "steps=1", origin_uid, destination_uid)
+        if route_metric not in ("duration", "distance"):
+            raise ValueError("Unsupported route metric")
+        self.route_metric = route_metric
+        self.identity = ("baidu", "directionlite/v1/walking", "bd09ll", "steps=1", origin_uid, destination_uid, route_metric)
 
     async def __aenter__(self):
         if self.client is None:
@@ -55,12 +58,13 @@ class BaiduProvider:
     def _endpoint(value):
         if not isinstance(value, dict):
             return None
-        point = (value.get("lng"), value.get("lat"))
-        if not all(type(v) in (int, float) and math.isfinite(v) for v in point):
+        raw = (value.get("lng"), value.get("lat"))
+        if any(type(v) not in (int, float, str) for v in raw):
             return None
         try:
+            point = tuple(float(v) for v in raw)
             normalize(point)
-        except ValueError:
+        except (ValueError, TypeError, OverflowError):
             return None
         return point
 
@@ -95,8 +99,23 @@ class BaiduProvider:
             if (start and math.dist(projection.to_local(start), projection.to_local(origin)) > 50) or (end and math.dist(projection.to_local(end), projection.to_local(destination)) > 50):
                 reason = "endpoint_offset"
                 continue
-            valid.append(RouteObservation(destination, observation.duration, endpoint_verified=start is not None and end is not None, route_origin=start, route_destination=end))
-        return min(valid, key=lambda o: o.duration) if valid else unknown(reason)
+            distance = route.get("distance")
+            if type(distance) not in (int, float) or not math.isfinite(distance) or distance < 0:
+                distance = None
+            path = []
+            for step in steps if isinstance(steps, list) else []:
+                if not isinstance(step, dict) or not isinstance(step.get("path"), str):
+                    continue
+                for pair in step["path"].split(";"):
+                    parts = pair.split(",")
+                    point = self._endpoint({"lng": parts[0], "lat": parts[1]}) if len(parts) == 2 else None
+                    if point and (not path or path[-1] != point):
+                        path.append(point)
+            if self.route_metric == "distance" and distance is None:
+                reason = "invalid_distance"
+                continue
+            valid.append(RouteObservation(destination, observation.duration, endpoint_verified=start is not None and end is not None, route_origin=start, route_destination=end, distance_m=distance, route_path=path))
+        return min(valid, key=lambda o: o.distance_m if self.route_metric == "distance" else o.duration) if valid else unknown(reason)
 
     async def query_walking_time(self, origin, destination, deadline):
         if self.client is None:

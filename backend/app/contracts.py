@@ -50,7 +50,11 @@ class Origin(WireModel):
 class Geometry(WireModel):
     type: Literal["Polygon", "MultiPolygon"]
     coordinates: list
-    coordinate_system: Literal["bd09ll"] = Field(default="bd09ll", validation_alias=AliasChoices("coordinate_system", "coordinateSystem"))
+    coordinate_system: Literal["bd09ll"] = Field(
+        default="bd09ll",
+        alias="coordinateSystem",
+        validation_alias=AliasChoices("coordinate_system", "coordinateSystem"),
+    )
 
 
 class Issue(WireModel):
@@ -136,6 +140,55 @@ class BlindPoint(CategoryLevels):
         return value
 
 
+class CoverageEvidence(WireModel):
+    category: MajorCategory
+    status: Literal["covered", "blind", "unknown"]
+    facility_id: str | None = None
+    distance_m: float | None = None
+    reason: str
+
+
+class AssessmentPoint(WireModel):
+    location: Origin
+    duration_s: float
+    categories: list[CoverageEvidence]
+
+
+class QueryEvidence(WireModel):
+    category: MinorCategory
+    query: str
+    status: Literal["complete", "partial", "failed", "truncated"]
+    pages: int
+    returned: int
+    excluded: int
+    invalid: int
+    total: int | None
+    reason: str | None
+
+
+class RouteEvidence(WireModel):
+    distance_m: float | None
+    duration_s: float | None
+    endpoint_verified: bool
+    reason: str | None
+    path: list[list[float]]
+
+
+class FacilityAnalysis(WireModel):
+    status: Literal["complete", "partial", "failed"]
+    queries: list[QueryEvidence]
+    assessments: list[AssessmentPoint]
+    candidate_points: int
+    assessed_points: int
+    unassessed_points: int
+    network_requests: int
+    elapsed_seconds: float
+    search_radius_m: int
+    routes: dict[str, RouteEvidence] = Field(default_factory=dict)
+    service_blind_regions: dict[MajorCategory, Geometry] = Field(default_factory=dict, alias="serviceBlindRegions")
+    warnings: list[str]
+
+
 class Data(WireModel):
     geometry: Geometry | None = None
     uncertain_region: Geometry | None = None
@@ -215,7 +268,8 @@ class TaskResultResponse(WireModel):
     data_source: Literal["synthetic", "baidu_walking"] = Field(alias="dataSource")
     center: Origin
     generated_at: float = Field(alias="generatedAt", gt=0)
-    facilities_status: Literal["not_integrated"] = Field(alias="facilitiesStatus")
+    facilities_status: Literal["not_integrated", "complete", "partial", "failed"] = Field(alias="facilitiesStatus")
+    facility_analysis: FacilityAnalysis | None = Field(default=None, alias="facilityAnalysis")
     coordinate_system: Literal["bd09ll"] = Field(default="bd09ll", alias="coordinateSystem")
     coordinate_order: Literal["longitude,latitude"] = Field(default="longitude,latitude", alias="coordinateOrder")
     units: dict[str, str] = Field(default_factory=lambda: {"distance": "m", "duration": "s", "area": "m2"})
