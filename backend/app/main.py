@@ -2,12 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 
 from .config import Settings, load_settings
 from .analysis import router
 from .contracts import AnalysisResponse, Issue
+from .analyses import AnalysisManager, analysis_router
 
 
 class HealthResponse(BaseModel):
@@ -15,9 +18,18 @@ class HealthResponse(BaseModel):
     baidu_ak_configured: bool
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, provider_factory=None) -> FastAPI:
     config = settings if settings is not None else load_settings()
-    app = FastAPI(title="Life Circle Backend", version="0.1.0", debug=False)
+    manager = AnalysisManager(config, provider_factory)
+
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        await manager.close()
+
+    app = FastAPI(title="Life Circle Backend", version="0.2.0", debug=False, lifespan=lifespan)
+    app.state.analyses = manager
+    app.include_router(analysis_router(manager))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -35,11 +47,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
+        if request.url.path.startswith("/api/analyses"):
+            # Keep the task API's response shape without reflecting raw inputs.
+            return JSONResponse(status_code=422, content={"detail": "Invalid analysis request"})
         # Never echo raw input, URLs or credentials from a validation exception.
         return failure_response(422, "INVALID_REQUEST", "请求字段无效，请核对坐标、坐标系、场景和参数。")
 
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
+        if request.url.path.startswith("/api/analyses"):
+            return await http_exception_handler(request, exc)
         return failure_response(exc.status_code, "HTTP_ERROR", "请求路径或方法不可用。")
 
     @app.exception_handler(Exception)
