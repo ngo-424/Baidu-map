@@ -7,7 +7,7 @@ import type { Center } from '../types';
 import { useBaiduMap } from '../map/useBaiduMap';
 import {
   COARSE_ACCURACY_M, locate, LocationError, locationNotice, searchPlaces,
-  type LocatedPosition, type PlaceResult,
+  type LocatedPosition, type PlaceResult, type PlaceSearchOutcome,
 } from './location';
 import './location.css';
 
@@ -24,7 +24,7 @@ export function LocationControls({ center, onPick }: Props) {
   const [locateError, setLocateError] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<PlaceResult[] | null>(null);
+  const [results, setResults] = useState<PlaceSearchOutcome | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const revision = useRef(0);
@@ -52,9 +52,9 @@ export function LocationControls({ center, onPick }: Props) {
     const current = ++revision.current;
     setSearching(true); setSearchError(null); setResults(null); setSearchStatus(null);
     try {
-      const items = await searchPlaces(api, keyword, center);
+      const outcome = await searchPlaces(api, keyword, center);
       if (revision.current !== current) return;
-      setResults(items);
+      setResults(outcome);
     } catch (error) {
       if (revision.current !== current) return;
       setSearchError(errorMessage(error, '地点搜索失败，请重试'));
@@ -68,6 +68,15 @@ export function LocationControls({ center, onPick }: Props) {
     setResults(null);
     setSearchError(null);
     setSearchStatus(`已选择：${item.title}${item.address ? ` · ${item.address}` : ''}`);
+  }
+
+  function resultItem(item: PlaceResult) {
+    return <li key={item.id}>
+      <button type="button" onClick={() => select(item)}>
+        <span className="api-poi-title">{item.title}{item.source === 'address' && <span className="api-poi-source">地址定位</span>}</span>
+        {item.address && <span className="api-poi-address">{item.address}</span>}
+      </button>
+    </li>;
   }
 
   if (mode !== 'real' || !api) return <p className="api-muted">{locationNotice(mode)}</p>;
@@ -91,14 +100,16 @@ export function LocationControls({ center, onPick }: Props) {
       <Button aria-label="搜索" icon={<SearchOutlined />} onClick={() => void doSearch()} loading={searching}>搜索</Button>
     </div>
     {searchError && <Alert type="error" title={searchError} showIcon />}
-    {results && <ul className="api-search-results" aria-label="搜索结果">
-      {results.map(item => <li key={item.id}>
-        <button type="button" onClick={() => select(item)}>
-          <span className="api-poi-title">{item.title}</span>
-          {item.address && <span className="api-poi-address">{item.address}</span>}
-        </button>
-      </li>)}
-    </ul>}
+    {results && <div className="api-search-groups" aria-label="搜索结果">
+      {results.nearby.length > 0 && <>
+        <p className="api-result-group">附近结果（5 公里内）</p>
+        <ul className="api-search-results">{results.nearby.map(resultItem)}</ul>
+      </>}
+      {results.far.length > 0 && <>
+        <p className="api-result-group">较远结果（超过 5 公里）</p>
+        <ul className="api-search-results">{results.far.map(resultItem)}</ul>
+      </>}
+    </div>}
     {searchStatus && <p className="api-location-status">{searchStatus}</p>}
   </div>;
 }

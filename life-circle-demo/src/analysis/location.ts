@@ -6,8 +6,8 @@
 
 import type { Center } from '../types';
 import type {
-  BaiduMapApi, BMapAddressComponent, BMapGeolocation, BMapGeolocationResult,
-  BMapLocalSearch, BMapLocalSearchResult, BMapPositionOptions,
+  BaiduMapApi, BMapAddressComponent, BMapBounds, BMapGeolocation, BMapGeolocationResult,
+  BMapLocalSearch, BMapLocalSearchResult, BMapPoint, BMapPositionOptions,
 } from '../map/baiduMapTypes';
 import type { MapMode } from '../map/baiduMapConfig';
 
@@ -33,19 +33,29 @@ export type PlaceResult = {
   title: string;
   address: string | null;
   center: Center;
+  /** 仅全国范围地址解析兜底命中的结果会标记为 address。 */
+  source?: 'address';
 };
+
+/** 检索结果：nearby 为 5 公里内结果（优先展示），far 为少量较远选项。 */
+export type PlaceSearchOutcome = { nearby: PlaceResult[]; far: PlaceResult[] };
 
 export type SearchOptions = { radius?: number; limit?: number };
 
 const LOCATE_TIMEOUT_MS = 12_000;
 const SEARCH_TIMEOUT_MS = 12_000;
+const GEOCODE_TIMEOUT_MS = 12_000;
 const STATUS_SUCCESS = 0;
 const STATUS_PERMISSION_DENIED = 6;
 const STATUS_TIMEOUT = 8;
 /** 超过该精度（米）视为粗略定位，需要用户在地图上核对。 */
 export const COARSE_ACCURACY_M = 200;
 export const SEARCH_RADIUS_M = 5_000;
+/** 较远结果的城市范围兜底：中心点 ±0.45°（约 50 公里）。 */
+export const SEARCH_BOUNDS_SPAN_DEG = 0.45;
 export const SEARCH_LIMIT = 10;
+/** 较远选项最多展示条数。 */
+export const FAR_LIMIT = 5;
 
 const round6 = (value: number) => Number(value.toFixed(6));
 
@@ -150,18 +160,25 @@ function normalizeResults(results: BMapLocalSearchResult | null, limit: number):
   return items;
 }
 
-/** 以 center 为圆心的 POI 关键词检索；结果按距离排序并规范化为 BD09LL 六位小数。 */
-export function searchPlaces(
-  api: BaiduMapApi, keyword: string, center: Center, options: SearchOptions = {}
+/** 创建覆盖中心点所在城市的矩形检索范围；未 clamp 到合法经纬度。 */
+function makeBounds(api: BaiduMapApi, center: Center): BMapBounds | null {
+  const Bounds = api.Bounds;
+  if (!Bounds) return null;
+  const span = SEARCH_BOUNDS_SPAN_DEG;
+  const sw = new api.Point(Math.max(center.lng - span, -180), Math.max(center.lat - span, -85));
+  const ne = new api.Point(Math.min(center.lng + span, 180), Math.min(center.lat + span, 85));
+  return new Bounds(sw, ne);
+}
+
+/** 单次检索执行：创建实例并触发指定检索动作；空结果解析为 []，超时与调用失败抛出 LocationError。 */
+function runSearch(
+  api: BaiduMapApi, query: string, limit: number, point: BMapPoint,
+  action: (instance: BMapLocalSearch) => void
 ): Promise<PlaceResult[]> {
-  const query = keyword.trim();
-  if (!query) return Promise.reject(new LocationError('invalid', '请输入要搜索的地点关键词'));
   const LocalSearch = api.LocalSearch;
   if (!LocalSearch) {
     return Promise.reject(new LocationError('unsupported', '当前地图脚本不支持地点检索，请手动输入坐标'));
   }
-  const radius = options.radius ?? SEARCH_RADIUS_M;
-  const limit = options.limit ?? SEARCH_LIMIT;
   return new Promise((resolve, reject) => {
     let settled = false;
     let instance: BMapLocalSearch | undefined;
@@ -176,21 +193,118 @@ export function searchPlaces(
       SEARCH_TIMEOUT_MS
     );
     try {
-      const point = new api.Point(center.lng, center.lat);
       instance = new LocalSearch(point, {
         pageCapacity: limit,
-        onSearchComplete: results => {
-          const items = normalizeResults(results, limit);
-          if (!items.length) {
-            finish(() => reject(new LocationError('no-results', '未找到相关地点，请尝试其他关键词')));
-            return;
-          }
-          finish(() => resolve(items));
-        },
+        onSearchComplete: results => finish(() => resolve(normalizeResults(results, limit))),
       });
-      instance.searchNearby(query, point, radius);
+      action(instance);
     } catch {
       finish(() => reject(new LocationError('failed', '地点搜索失败，请重试')));
     }
   });
+}
+
+/** 近似平面距离（米）；仅用于界面分组与排序展示，不作为业务距离结论。 */
+export function approxDistanceM(from: Center, to: Center): number {
+  const rad = Math.PI / 180;
+  const x = (to.lng - from.lng) * Math.cos(((from.lat + to.lat) / 2) * rad);
+  const y = to.lat - from.lat;
+  return Math.hypot(x, y) * rad * 6_371_000;
+}
+
+/** 较远结果的严格关键词匹配：标题需包含全部关键词（空白分词），避免城市范围检索的模糊召回。 */
+export function strictTitleMatch(title: string, query: string): boolean {
+  const haystack = title.trim().toLowerCase();
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return terms.length > 0 && terms.every(term => haystack.includes(term));
+}
+
+/** 从城市范围结果中挑出较远选项：标题严格匹配关键词、与附近结果按 id 去重、排除半径内地点、最多 FAR_LIMIT 条。 */
+function selectFar(
+  wide: PlaceResult[], nearby: PlaceResult[], center: Center, radius: number, query: string
+): PlaceResult[] {
+  const seen = new Set(nearby.map(item => item.id));
+  const far: PlaceResult[] = [];
+  for (const item of wide) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    if (!strictTitleMatch(item.title, query)) continue;
+    if (approxDistanceM(center, item.center) <= radius) continue;
+    far.push(item);
+    if (far.length >= FAR_LIMIT) break;
+  }
+  return far;
+}
+
+/** 全国范围地址/行政区解析兜底：仅当附近与城市范围均无结果时使用，如“苍南县”这类跨城名称。 */
+function geocodePlace(api: BaiduMapApi, query: string): Promise<PlaceResult | null> {
+  const Geocoder = api.Geocoder;
+  if (!Geocoder) return Promise.resolve(null);
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (value: PlaceResult | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), GEOCODE_TIMEOUT_MS);
+    try {
+      new Geocoder().getPoint(query, point => {
+        const center = point ? toCenter(point.lng, point.lat) : null;
+        finish(center ? { id: `address:${query}`, title: query, address: null, center, source: 'address' } : null);
+      });
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+/**
+ * POI 关键词检索：先搜 center 周边 radius 米（优先结果），再在城市范围矩形内补充严格匹配的较远选项；
+ * 两者皆空时用地址解析兜底全国范围的行政区/地址名称。全部失败时报 no-results（超时优先反馈）。
+ */
+export async function searchPlaces(
+  api: BaiduMapApi, keyword: string, center: Center, options: SearchOptions = {}
+): Promise<PlaceSearchOutcome> {
+  const query = keyword.trim();
+  if (!query) throw new LocationError('invalid', '请输入要搜索的地点关键词');
+  if (!api.LocalSearch) {
+    throw new LocationError('unsupported', '当前地图脚本不支持地点检索，请手动输入坐标');
+  }
+  const radius = options.radius ?? SEARCH_RADIUS_M;
+  const limit = options.limit ?? SEARCH_LIMIT;
+  let point: BMapPoint;
+  try {
+    point = new api.Point(center.lng, center.lat);
+  } catch {
+    throw new LocationError('failed', '地点搜索失败，请重试');
+  }
+  let nearby = await runSearch(api, query, limit, point, instance => instance.searchNearby(query, point, radius));
+  let far: PlaceResult[] = [];
+  let wideError: unknown = null;
+  const bounds = makeBounds(api, center);
+  if (bounds) {
+    try {
+      const wide = await runSearch(api, query, limit, point, instance => {
+        if (typeof instance.searchInBounds !== 'function') throw new Error('searchInBounds unavailable');
+        instance.searchInBounds(query, bounds);
+      });
+      far = selectFar(wide, nearby, center, radius, query);
+    } catch (error) {
+      wideError = error;
+    }
+  }
+  if (!nearby.length && !far.length) {
+    const resolved = await geocodePlace(api, query);
+    if (resolved) {
+      if (approxDistanceM(center, resolved.center) <= radius) nearby = [resolved];
+      else far = [resolved];
+    }
+  }
+  if (!nearby.length && !far.length) {
+    if (wideError instanceof LocationError && wideError.code === 'timeout') throw wideError;
+    throw new LocationError('no-results', '未找到相关地点，请尝试其他关键词');
+  }
+  return { nearby, far };
 }

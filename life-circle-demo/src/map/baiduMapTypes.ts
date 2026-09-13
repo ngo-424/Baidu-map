@@ -138,7 +138,16 @@ export interface BMapLocalSearchOptions {
 export interface BMapLocalSearch {
   search(keyword: string): void;
   searchNearby(keyword: string, center: BMapPoint | string, radius: number): void;
+  searchInBounds(keyword: string, bounds: BMapBounds): void;
   clearResults(): void;
+}
+
+/** 矩形范围，供区域检索使用；由 Bounds(sw, ne) 构造。 */
+export interface BMapBounds {}
+
+/** 地址解析：把地址/行政区名称转为 BD09LL 坐标；city 可选，缺省不限定城市。 */
+export interface BMapGeocoder {
+  getPoint(address: string, callback: (point: BMapPoint | null) => void, city?: string): void;
 }
 
 /** 脚本加载完成后挂到 window 的全局对象。 */
@@ -154,6 +163,8 @@ export interface BaiduMapApi {
   /** 定位与检索构造器为可选：旧版脚本或测试替身可能不提供，调用方必须运行时判断。 */
   Geolocation?: new () => BMapGeolocation;
   LocalSearch?: new (location: string | BMapMap | BMapPoint, options?: BMapLocalSearchOptions) => BMapLocalSearch;
+  Bounds?: new (sw: BMapPoint, ne: BMapPoint) => BMapBounds;
+  Geocoder?: new () => BMapGeocoder;
 }
 
 declare global {

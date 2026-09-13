@@ -3,7 +3,10 @@ import { test, expect, type Page } from '@playwright/test';
 type LocationFixture = {
   geolocation?: 'ok' | 'denied' | 'timeout';
   accuracy?: number;
+  nearbyEmpty?: boolean;
   places?: { title: string; address?: string; uid?: string; lng: number; lat: number }[];
+  farPlaces?: { title: string; address?: string; uid?: string; lng: number; lat: number }[];
+  geocode?: { lng: number; lat: number } | null;
 };
 
 async function mockMap(page: Page, location: LocationFixture = {}) {
@@ -65,8 +68,7 @@ async function mockMap(page: Page, location: LocationFixture = {}) {
     }
     class LocalSearch {
       constructor(public location: unknown, public options: { onSearchComplete?: (results: unknown) => void; pageCapacity?: number }) {}
-      searchNearby() {
-        const places = fixture.places ?? [];
+      private respond(places: NonNullable<LocationFixture['places']>) {
         const result = {
           getPoi: (index: number) => places[index]
             ? { ...places[index], point: { lng: places[index].lng, lat: places[index].lat } }
@@ -76,10 +78,18 @@ async function mockMap(page: Page, location: LocationFixture = {}) {
         };
         setTimeout(() => this.options.onSearchComplete?.(result), 0);
       }
+      searchNearby() { this.respond(fixture.nearbyEmpty ? [] : fixture.places ?? []); }
+      searchInBounds() { this.respond(fixture.farPlaces ?? []); }
       search() {}
       clearResults() {}
     }
-    Object.assign(window, { BMapGL: { Map, Point, Polygon, Marker: Overlay, Geolocation, LocalSearch } });
+    class Bounds { constructor(public sw: unknown, public ne: unknown) {} }
+    class Geocoder {
+      getPoint(_address: string, callback: (point: unknown) => void) {
+        setTimeout(() => callback(fixture.geocode ?? null), 0);
+      }
+    }
+    Object.assign(window, { BMapGL: { Map, Point, Polygon, Marker: Overlay, Geolocation, LocalSearch, Bounds, Geocoder } });
   }, location);
 }
 
@@ -256,4 +266,48 @@ test('empty POI search result shows a retry hint', async ({ page }) => {
   await page.getByRole('textbox', { name: '搜索地点' }).fill('不存在的地方');
   await page.getByRole('button', { name: '搜索', exact: true }).click();
   await expect(page.getByText('未找到相关地点，请尝试其他关键词', { exact: true })).toBeVisible();
+});
+
+test('POI search falls back to far options when nothing is nearby', async ({ page }) => {
+  await mockMap(page, {
+    nearbyEmpty: true,
+    farPlaces: [
+      { title: '远郊公园', address: '远郊路9号', uid: 'poi-far', lng: 117.2, lat: 40.3 },
+      { title: '远郊花园', address: '远郊路10号', uid: 'poi-loose', lng: 117.3, lat: 40.3 },
+    ],
+  });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('公园');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /远郊花园/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /远郊公园/ }).click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/117\.2/);
+});
+
+test('POI search lists nearby results first and keeps far options', async ({ page }) => {
+  await mockMap(page, {
+    places: [{ title: '近处公园', address: '近处路1号', uid: 'poi-near', lng: 116.41, lat: 39.92 }],
+    farPlaces: [{ title: '远郊公园', address: '远郊路9号', uid: 'poi-far', lng: 117.2, lat: 40.3 }],
+  });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('公园');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('附近结果（5 公里内）', { exact: true })).toBeVisible();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  const options = page.getByRole('button', { name: /公园/ });
+  await expect(options).toHaveCount(2);
+  await options.first().click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/116\.41/);
+});
+
+test('POI search resolves a nationwide administrative name through address fallback', async ({ page }) => {
+  await mockMap(page, { geocode: { lng: 120.43, lat: 27.52 } });
+  await page.goto('/');
+  await page.getByRole('textbox', { name: '搜索地点' }).fill('苍南县');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('较远结果（超过 5 公里）', { exact: true })).toBeVisible();
+  await expect(page.getByText('地址定位', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /苍南县/ }).click();
+  await expect(page.getByRole('spinbutton', { name: '经度', exact: true })).toHaveValue(/120\.43/);
 });
