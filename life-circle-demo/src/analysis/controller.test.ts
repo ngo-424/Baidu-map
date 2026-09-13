@@ -8,11 +8,56 @@ const status = (state = 'running'): TaskStatus => ({ taskId: 'one', status: stat
 const result = { taskId: 'one', dataSource: 'synthetic' } as AnalysisResult;
 function service(): AnalysisService {
   return { create: vi.fn(async () => status()), status: vi.fn(async () => status('completed')),
-    result: vi.fn(async () => result), cancel: vi.fn(async () => status('cancelled')) };
+    result: vi.fn(async () => result), cancel: vi.fn(async () => status('cancelled')),
+    cancelByRequest: vi.fn(async () => status('cancelled')) };
 }
 afterEach(() => vi.useRealTimers());
 
 describe('analysis lifecycle', () => {
+  it('recovers and cancels a lost create response by request key before changing center', async () => {
+    const api = service();
+    let active = false;
+    api.create = vi.fn(async () => {
+      if (active) throw new ApiError('busy', 409);
+      if (vi.mocked(api.create).mock.calls.length === 1) { active = true; throw new Error('response lost'); }
+      return status();
+    });
+    api.cancelByRequest = vi.fn(async () => { active = false; return status('cancelled'); });
+    const controller = new AnalysisController(api, () => {});
+    await controller.start(input);
+    const key = vi.mocked(api.create).mock.calls[0][0].clientRequestId;
+    await controller.reset();
+    expect(api.cancelByRequest).toHaveBeenCalledWith(key);
+    expect(active).toBe(false);
+    await controller.start({ ...input, center: { lng: 116.405, lat: 39.915 } });
+    expect(controller.state.phase).toBe('completed');
+    expect(api.create).toHaveBeenCalledTimes(2);
+  });
+  it('retains request-key cancellation after network failure and retries without creating work', async () => {
+    const api = service();
+    vi.mocked(api.create).mockRejectedValueOnce(new Error('response lost'));
+    vi.mocked(api.cancelByRequest).mockRejectedValueOnce(new Error('offline'));
+    const controller = new AnalysisController(api, () => {});
+    await controller.start(input);
+    await controller.reset();
+    expect(controller.state.phase).toBe('error');
+    await controller.retry();
+    expect(controller.state.phase).toBe('idle');
+    expect(api.cancelByRequest).toHaveBeenCalledTimes(2);
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+  it('recovers when an obsolete in-flight create finally fails after a center edit', async () => {
+    const api = service();
+    let reject!: (reason: Error) => void;
+    api.create = vi.fn(() => new Promise<TaskStatus>((_resolve, r) => { reject = r; }));
+    const controller = new AnalysisController(api, () => {});
+    const work = controller.start(input);
+    await controller.reset();
+    reject(new Error('lost late response'));
+    await work;
+    expect(api.cancelByRequest).toHaveBeenCalledTimes(1);
+    expect(controller.state.phase).toBe('idle');
+  });
   it('uses server completion and result without a simulated timer', async () => {
     const api = service();
     const states: string[] = [];

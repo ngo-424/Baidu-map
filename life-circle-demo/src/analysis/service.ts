@@ -1,4 +1,5 @@
 import type { AnalysisService } from './types';
+import { validResult, validTask } from './validate';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -24,7 +25,14 @@ export function createApiService(base = import.meta.env.VITE_API_BASE_URL || 'ht
         422: '中心坐标或预算不符合要求', 503: '后端步行服务未就绪，请检查 AK 和 QPS 配置' };
       throw new ApiError(messages[response.status] || '后端请求失败，请稍后重试', response.status);
     }
-    try { return await response.json() as T; }
+    try {
+      const value: unknown = await response.json();
+      const valid = path.endsWith('/result') ? validResult(value) : validTask(value);
+      if (!valid) throw new Error('Invalid response structure');
+      if (method === 'GET' && value && typeof value === 'object' && 'taskId' in value
+        && value.taskId !== decodeURIComponent(path.split('/')[1])) throw new Error('Mismatched task');
+      return value as T;
+    }
     catch { throw new Error('后端返回格式异常，请检查服务版本'); }
   }
   return {
@@ -32,5 +40,6 @@ export function createApiService(base = import.meta.env.VITE_API_BASE_URL || 'ht
     status: (id, signal) => request(`/${encodeURIComponent(id)}`, 'GET', undefined, signal),
     result: (id, signal) => request(`/${encodeURIComponent(id)}/result`, 'GET', undefined, signal),
     cancel: id => request(`/${encodeURIComponent(id)}/cancel`, 'POST'),
+    cancelByRequest: key => request(`/by-request/${encodeURIComponent(key)}/cancel`, 'POST'),
   };
 }

@@ -28,6 +28,7 @@ export interface AnalysisService {
   status(id: string, signal?: AbortSignal): Promise<TaskStatus>;
   result(id: string, signal?: AbortSignal): Promise<AnalysisResult>;
   cancel(id: string): Promise<TaskStatus>;
+  cancelByRequest(clientRequestId: string): Promise<TaskStatus>;
 }
 export type AnalysisState = {
   phase: 'idle' | 'submitting' | 'running' | 'cancelling' | 'completed' | 'cancelled' | 'error';

@@ -37,7 +37,7 @@ def run_synthetic(request: SyntheticRequest):
     # Whole-analysis status cannot be complete before facilities/report are implemented.
     return AnalysisResponse(
         status="failed" if result.quality == "insufficient" else "partial",
-        source="synthetic", algorithm_version="2d63015", origin=request.origin, rules=Rules(distance=request.distance_rule),
+        source="synthetic", algorithm_version="aca992d", origin=request.origin, rules=Rules(distance=request.distance_rule),
         data=Data(geometry=payload["geometry"], uncertain_region=payload["uncertainRegion"],
                   unknown_region=payload["unknownRegion"], computation_extent=payload["computationExtent"]),
         algorithm=payload,

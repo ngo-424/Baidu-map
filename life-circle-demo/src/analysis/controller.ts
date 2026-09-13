@@ -1,7 +1,7 @@
 import type { AnalysisInput, AnalysisService, AnalysisState, TaskStatus } from './types';
 import { ApiError } from './service';
 
-type Run = { input: AnalysisInput; id?: string; abort: AbortController; revision: number; expired?: boolean };
+type Run = { input: AnalysisInput; id?: string; abort: AbortController; revision: number; expired?: boolean; creationFailed?: boolean };
 function pause(signal: AbortSignal) {
   return new Promise<void>(resolve => {
     const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve(); };
@@ -16,6 +16,7 @@ export class AnalysisController {
   private run?: Run;
   private revision = 0;
   private pendingCancels = new Set<string>();
+  private pendingRequestCancels = new Set<string>();
   constructor(private api: AnalysisService, private publish: (state: AnalysisState) => void) {}
   private set(state: AnalysisState) { this.state = state; this.publish(state); }
   private current(run: Run) { return run.revision === this.revision; }
@@ -24,7 +25,7 @@ export class AnalysisController {
     const resetting = this.run ? this.reset() : undefined;
     const revision = this.revision;
     if (resetting) await resetting;
-    if (this.pendingCancels.size && !await this.clearPending()) return;
+    if ((this.pendingCancels.size || this.pendingRequestCancels.size) && !await this.clearPending()) return;
     if (revision !== this.revision) return;
     const run = { input: { ...input, clientRequestId: crypto.randomUUID() }, abort: new AbortController(), revision: ++this.revision };
     this.run = run;
@@ -54,6 +55,13 @@ export class AnalysisController {
       }
       await this.watch(run);
     } catch (error) {
+      if (!run.id && !(error instanceof ApiError && [404, 409, 422, 503].includes(error.status))) {
+        run.creationFailed = true;
+        if (!this.current(run)) {
+          try { await this.abandonRequest(run.input.clientRequestId); }
+          catch { /* Retained for retry before starting any new task. */ }
+        }
+      }
       if (error instanceof ApiError && error.status === 404) run.expired = true;
       if (this.current(run) && !run.abort.signal.aborted) this.set({ ...this.state, phase: 'error', error: error instanceof Error ? error.message : '分析失败，请重试' });
     }
@@ -106,7 +114,17 @@ export class AnalysisController {
     if (old?.id && !terminal) {
       try { await this.abandon(old.id); }
       catch { if (revision === this.revision) this.set({ phase: 'error', error: '旧任务取消未获确认，后端可能仍在运行，请检查服务后重试' }); }
+    } else if (old?.creationFailed) {
+      try { await this.abandonRequest(old.input.clientRequestId); }
+      catch { if (revision === this.revision) this.set({ phase: 'error', error: '旧任务取消未获确认，后端可能仍在运行，请检查服务后重试' }); }
     }
+  }
+
+  private async abandonRequest(key: string) {
+    this.pendingRequestCancels.add(key);
+    try { await this.api.cancelByRequest(key); }
+    catch (error) { if (!(error instanceof ApiError && error.status === 404)) throw error; }
+    this.pendingRequestCancels.delete(key);
   }
 
   private async abandon(id: string) {
@@ -118,6 +136,7 @@ export class AnalysisController {
 
   private async clearPending() {
     try {
+      for (const key of this.pendingRequestCancels) await this.abandonRequest(key);
       for (const id of this.pendingCancels) await this.abandon(id);
       return true;
     } catch {
