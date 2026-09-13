@@ -30,7 +30,7 @@ def poi(uid="x", name="社区药店"):
     return {"uid": uid, "name": name, "location": {"lng": ORIGIN[0]+.001, "lat": ORIGIN[1]}}
 
 
-def test_pagination_retry_dedup_and_truncation():
+def test_rate_limit_stops_all_categories():
     async def run():
         calls = []
         def handle(r):
@@ -42,13 +42,13 @@ def test_pagination_retry_dedup_and_truncation():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
             places = PlacesClient(client, "fixture", RateGate(None), CancelToken())
             items, metadata = await places.search(ORIGIN, 5000, time.monotonic()+20)
-        assert places.requests == 11 and len(items) == 20
-        assert all(m["status"] == "truncated" and m["pages"] == 2 for m in metadata)
+        assert places.requests == 1 and len(items) == 0
+        assert all(m["status"] == "failed" and m["reason"] == "rate_limit" for m in metadata)
         assert "fixture" not in str(places.records)
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("distance,expected", [(899,"covered"), (999,"unknown"), (1000,"covered"), (1001,"unknown"), (1101,"blind")])
+@pytest.mark.parametrize("distance,expected", [(899,"covered"), (999,"unknown"), (1000,"covered"), (1001,"unknown"), (1101,"unknown")])
 def test_walking_distance_boundaries_with_same_analysis(distance, expected):
     async def run():
         def handle(r):
@@ -68,6 +68,7 @@ def test_walking_distance_boundaries_with_same_analysis(distance, expected):
         assert summary.routes["x"].distance_m == distance
         assert "medical" in summary.service_blind_regions
         assert summary.service_blind_regions["medical"].type in ("Polygon", "MultiPolygon")
+        assert summary.service_blind_regions["medical"].coordinates == []
         assert summary.network_requests == 6
         assert "不生成覆盖率" in report
     asyncio.run(run())

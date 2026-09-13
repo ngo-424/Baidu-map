@@ -3,6 +3,7 @@ import { Alert, Button, Card, Select, Tag } from 'antd';
 import type { AnalysisResult } from './types';
 import type { RouteEvidence } from '../api-contract';
 import './facilities.css';
+import { requestFacilityRoute } from './routes';
 
 export const groupNames: Record<string,string> = { shopping:'购物', medical:'医疗服务', education:'教育' };
 const statusNames: Record<string,string> = {covered:'有设施',blind:'查询范围内盲区',unknown:'无法判断'};
@@ -12,23 +13,26 @@ export function FacilityPanel({result, group, onGroup, selected, onSelect, onRou
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
   const revision=useRef(0);
-  useEffect(()=>{revision.current++;setRoute(null);setError('');setLoading(false);return ()=>{revision.current++;};},[selected]);
+  const pending=useRef<AbortController | null>(null);
+  const resultRef=useRef(result);
+  resultRef.current=result;
+  useEffect(()=>{revision.current++;pending.current?.abort();setRoute(null);setError('');setLoading(false);return ()=>{revision.current++;pending.current?.abort();};},[selected,result]);
   const analysis = result.facilityAnalysis;
   if (!analysis) return null;
   const facilities = (result.data.facilities || []).filter(f=>group==='all'||f.major_category===group);
   const current = (result.data.facilities||[]).find(f=>f.id===selected);
   async function showRoute(id:string) {
     const currentRevision=++revision.current;
+    pending.current?.abort();
+    const controller=new AbortController();
+    pending.current=controller;
+    const isCurrent=()=>revision.current===currentRevision && resultRef.current===result && !controller.signal.aborted;
     setLoading(true);setError('');setRoute(null);onRoute([]);
     try {
-      const base=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
-      const response = await fetch(`${base}/api/analyses/${encodeURIComponent(result.taskId)}/routes/${encodeURIComponent(id)}`,{method:'POST',signal:AbortSignal.timeout(25_000)});
-      if (!response.ok) throw new Error(response.status===429?'本次新增路线查询已达3次，请使用已有路线。':'路线暂不可用，请重试。');
-      const value = await response.json();
-      if (typeof value.endpoint_verified!=='boolean'||!Array.isArray(value.path)||!value.path.every((p:unknown)=>Array.isArray(p)&&p.length===2&&p.every(x=>typeof x==='number'&&Number.isFinite(x)))) throw new Error('路线格式异常');
-      if (revision.current===currentRevision) {setRoute(value);onRoute(value.path);}
-    } catch(e) {if(revision.current===currentRevision)setError(e instanceof Error?e.message:'路线获取失败');}
-    finally {if(revision.current===currentRevision)setLoading(false);}
+      const value = await requestFacilityRoute(result.taskId, id, controller.signal);
+      if (isCurrent()) {setRoute(value);onRoute(value.path);}
+    } catch(e) {if(isCurrent())setError(e instanceof Error?e.message:'路线获取失败');}
+    finally {if(isCurrent())setLoading(false);}
   }
   return <Card title="设施与基础报告" className="facility-panel">
     <Alert type="info" title="同一次分析的设施与点位核对" description={result.data.report}/>

@@ -292,13 +292,11 @@ def analysis_router(manager):
                 raise HTTPException(429, "本次分析的新增路线查询已达3次，请使用已有路线或重新分析")
             job.route_clicks += 1
             deadline = time.monotonic()+20
-            if not await manager.gate.wait(deadline):
-                raise HTTPException(503, "步行服务暂不可用")
             origin = job.payload.fingerprint()[0]
             silence_transport_logs()
             async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
                 provider = BaiduProvider(manager.settings.baidu_map_ak.get_secret_value(),client=client,destination_uid=facility_id,route_metric="distance")
-                observed = await provider.query_walking_time(origin,(item["location"]["lng"],item["location"]["lat"]),deadline)
+                observed = await LimitedProvider(provider, manager.gate).query_walking_time(origin,(item["location"]["lng"],item["location"]["lat"]),deadline)
             value = RouteEvidence(distance_m=observed.distance_m,duration_s=observed.duration,endpoint_verified=observed.endpoint_verified,
                                   reason=observed.reason,path=observed.route_path if observed.endpoint_verified else []).model_dump()
             evidence["routes"][facility_id] = value
