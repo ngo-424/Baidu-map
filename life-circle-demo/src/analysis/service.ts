@@ -1,11 +1,12 @@
 import type { AnalysisService } from './types';
-import { validResult, validTask } from './validate';
+import { validTask } from './validate';
+import { decodeAnalysisResult } from './adapter';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
-export function createApiService(base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000', fetcher: typeof fetch = fetch): AnalysisService {
+export function createApiService(base = import.meta.env.VITE_API_BASE_URL?.trim() || '', fetcher: typeof fetch = fetch): AnalysisService {
   async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     const timeout = AbortSignal.timeout(10_000);
     let response: Response;
@@ -26,9 +27,9 @@ export function createApiService(base = import.meta.env.VITE_API_BASE_URL || 'ht
       throw new ApiError(messages[response.status] || '后端请求失败，请稍后重试', response.status);
     }
     try {
-      const value: unknown = await response.json();
-      const valid = path.endsWith('/result') ? validResult(value) : validTask(value);
-      if (!valid) throw new Error('Invalid response structure');
+      const body: unknown = await response.json();
+      const value = path.endsWith('/result') ? decodeAnalysisResult(body) : body;
+      if (!path.endsWith('/result') && !validTask(value)) throw new Error('Invalid response structure');
       if (method === 'GET' && value && typeof value === 'object' && 'taskId' in value
         && value.taskId !== decodeURIComponent(path.split('/')[1])) throw new Error('Mismatched task');
       return value as T;

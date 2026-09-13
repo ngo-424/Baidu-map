@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnalysisController } from './controller';
 import { ApiError } from './service';
 import type { AnalysisService, TaskStatus, AnalysisResult } from './types';
+import { resultFixture } from './testFixtures';
 
 const input = { center: { lng: 116.404, lat: 39.915 }, budget: 200 as const };
-const status = (state = 'running'): TaskStatus => ({ taskId: 'one', status: state as TaskStatus['status'], stage: 'initializing', requests: 2, networkRequests: 0, budget: 200, elapsedSeconds: 1, dataSource: 'synthetic', error: null });
-const result = { taskId: 'one', dataSource: 'synthetic' } as AnalysisResult;
+const status = (state = 'running'): TaskStatus => ({ schema_version: '1.0', responseType: 'task', taskId: 'one', status: state as TaskStatus['status'], businessStatus: state === 'failed' ? 'failed' : null, stage: 'initializing', requests: 2, networkRequests: 0, budget: 200, elapsedSeconds: 1, dataSource: 'synthetic', error: null });
+const result = resultFixture();
 function service(): AnalysisService {
   return { create: vi.fn(async () => status()), status: vi.fn(async () => status('completed')),
     result: vi.fn(async () => result), cancel: vi.fn(async () => status('cancelled')),
@@ -14,6 +15,22 @@ function service(): AnalysisService {
 afterEach(() => vi.useRealTimers());
 
 describe('analysis lifecycle', () => {
+  it('rejects completed results for a different center, budget, source or task', async () => {
+    for (const wrong of [
+      { ...result, center: { lng: 120, lat: 39 } },
+      { ...result, isochrone: { ...result.isochrone, config: { ...result.isochrone.config, budget: 800 } } },
+      { ...result, dataSource: 'baidu_walking' as const },
+      { ...result, taskId: 'other' },
+    ]) {
+      const api = service();
+      vi.mocked(api.result).mockResolvedValue(wrong);
+      const controller = new AnalysisController(api, () => {});
+      await controller.start(input);
+      expect(controller.state.phase).toBe('error');
+      expect(controller.state.error).toContain('提交条件不一致');
+      expect(controller.state.result).toBeUndefined();
+    }
+  });
   it('recovers and cancels a lost create response by request key before changing center', async () => {
     const api = service();
     let active = false;
@@ -29,6 +46,7 @@ describe('analysis lifecycle', () => {
     await controller.reset();
     expect(api.cancelByRequest).toHaveBeenCalledWith(key);
     expect(active).toBe(false);
+    vi.mocked(api.result).mockResolvedValue({ ...result, center: { lng: 116.405, lat: 39.915 } });
     await controller.start({ ...input, center: { lng: 116.405, lat: 39.915 } });
     expect(controller.state.phase).toBe('completed');
     expect(api.create).toHaveBeenCalledTimes(2);
