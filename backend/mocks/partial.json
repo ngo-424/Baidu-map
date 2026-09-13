@@ -147,11 +147,11 @@
     },
     "facilities": [
       {
-        "id": "mock-pharmacy",
-        "name": "虚构药店",
         "category": "pharmacy",
         "major_category": "medical",
         "minor_category": "pharmacy",
+        "id": "mock-pharmacy",
+        "name": "虚构药店",
         "location": {
           "lng": 116.4,
           "lat": 39.9

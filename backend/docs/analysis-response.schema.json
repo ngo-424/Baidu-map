@@ -3,9 +3,6 @@
     "BlindPoint": {
       "additionalProperties": false,
       "properties": {
-        "location": {
-          "$ref": "#/$defs/Origin"
-        },
         "category": {
           "enum": [
             "market",
@@ -37,6 +34,9 @@
           "title": "Minor Category",
           "type": "string"
         },
+        "location": {
+          "$ref": "#/$defs/Origin"
+        },
         "status": {
           "enum": [
             "covered",
@@ -52,10 +52,10 @@
         }
       },
       "required": [
-        "location",
         "category",
         "major_category",
         "minor_category",
+        "location",
         "status",
         "evidence"
       ],
@@ -321,14 +321,6 @@
     "Facility": {
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
         "category": {
           "enum": [
             "market",
@@ -360,6 +352,14 @@
           "title": "Minor Category",
           "type": "string"
         },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
         "location": {
           "$ref": "#/$defs/Origin"
         },
@@ -376,11 +376,11 @@
         }
       },
       "required": [
-        "id",
-        "name",
         "category",
         "major_category",
         "minor_category",
+        "id",
+        "name",
         "location",
         "in_circle"
       ],

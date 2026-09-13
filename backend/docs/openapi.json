@@ -507,9 +507,6 @@
       },
       "BlindPoint": {
         "properties": {
-          "location": {
-            "$ref": "#/components/schemas/Origin"
-          },
           "category": {
             "type": "string",
             "enum": [
@@ -541,6 +538,9 @@
             ],
             "title": "Minor Category"
           },
+          "location": {
+            "$ref": "#/components/schemas/Origin"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -558,10 +558,10 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "location",
           "category",
           "major_category",
           "minor_category",
+          "location",
           "status",
           "evidence"
         ],
@@ -838,14 +838,6 @@
       },
       "Facility": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
           "category": {
             "type": "string",
             "enum": [
@@ -877,6 +869,14 @@
             ],
             "title": "Minor Category"
           },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
           "location": {
             "$ref": "#/components/schemas/Origin"
           },
@@ -895,11 +895,11 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
-          "name",
           "category",
           "major_category",
           "minor_category",
+          "id",
+          "name",
           "location",
           "in_circle"
         ],

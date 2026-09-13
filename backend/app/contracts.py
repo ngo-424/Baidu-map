@@ -31,6 +31,8 @@ def map_business_status(*, quality: str, facilities_status: str,
     """
     if quality in ("insufficient", "failed"):
         return "failed"
+    if quality != "usable":
+        return "partial"
     if facilities_status == "complete" and facilities is not None:
         return "empty" if facilities == [] else "complete"
     return "partial"
@@ -58,7 +60,19 @@ class Issue(WireModel):
     severity: Literal["warning", "error", "pending"] = "warning"
 
 
-class Facility(WireModel):
+class CategoryLevels(WireModel):
+    category: Category
+    major_category: MajorCategory
+    minor_category: MinorCategory
+
+    @model_validator(mode="after")
+    def consistent_categories(self):
+        if self.category != self.minor_category or self.major_category != MINOR_TO_MAJOR[self.minor_category]:
+            raise ValueError("Category fields must describe the same facility category")
+        return self
+
+
+class Facility(CategoryLevels):
     id: str
     name: str
     category: Category
@@ -80,7 +94,7 @@ class Facility(WireModel):
         return value
 
 
-class CategoryResult(WireModel):
+class CategoryResult(CategoryLevels):
     category: Category
     major_category: MajorCategory
     minor_category: MinorCategory
@@ -101,7 +115,7 @@ class CategoryResult(WireModel):
         return value
 
 
-class BlindPoint(WireModel):
+class BlindPoint(CategoryLevels):
     location: Origin
     category: Category
     major_category: MajorCategory

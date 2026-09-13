@@ -7,12 +7,29 @@ from fastapi.testclient import TestClient
 from life_circle.models import RouteObservation
 from shapely.geometry import shape
 
-from app.contracts import AnalysisResponse
+from app.contracts import AnalysisResponse, Facility, CategoryResult, BlindPoint
+from pydantic import ValidationError
 from app.config import Settings
 from app.main import create_app
 from app.rules import DistanceRule, category_service, distance_within
 
 CASES = json.loads((Path(__file__).parent / "fixtures/n04-boundaries.json").read_text())
+
+
+@pytest.mark.parametrize("model,fields", [
+    (Facility, {"id": "x", "name": "test", "location": {"lng": 121.5, "lat": 31.2}, "in_circle": None}),
+    (CategoryResult, {"query_status": "complete", "count_in_circle": 1, "service_status": "unknown"}),
+    (BlindPoint, {"location": {"lng": 121.5, "lat": 31.2}, "status": "unknown", "evidence": "test"}),
+])
+def test_category_levels_keep_legacy_input_and_reject_conflicts(model, fields):
+    legacy = model(**fields, category="pharmacy")
+    assert legacy.minor_category == "pharmacy" and legacy.major_category == "medical"
+    for categories in [
+        {"category": "school", "minor_category": "pharmacy", "major_category": "medical"},
+        {"category": "pharmacy", "minor_category": "pharmacy", "major_category": "shopping"},
+    ]:
+        with pytest.raises(ValidationError):
+            model(**fields, **categories)
 
 
 @pytest.fixture

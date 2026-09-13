@@ -75,6 +75,8 @@ def test_n05_task_models_are_explicit_and_openapi_is_typed():
     ("usable", "complete", [], "empty"),
     ("usable", "complete", None, "partial"),
     ("partial", "not_integrated", None, "partial"),
+    ("partial", "complete", [{"id": "1"}], "partial"),
+    ("partial", "complete", [], "partial"),
     ("insufficient", "not_integrated", None, "failed"),
 ])
 def test_business_status_mapping(quality, facilities_status, facilities, expected):

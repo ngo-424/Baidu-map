@@ -101,11 +101,11 @@
     },
     "facilities": [
       {
-        "id": "mock-market",
-        "name": "虚构market",
         "category": "market",
         "major_category": "shopping",
         "minor_category": "market",
+        "id": "mock-market",
+        "name": "虚构market",
         "location": {
           "lng": 116.4,
           "lat": 39.9
@@ -113,11 +113,11 @@
         "in_circle": true
       },
       {
-        "id": "mock-pharmacy",
-        "name": "虚构pharmacy",
         "category": "pharmacy",
         "major_category": "medical",
         "minor_category": "pharmacy",
+        "id": "mock-pharmacy",
+        "name": "虚构pharmacy",
         "location": {
           "lng": 116.4,
           "lat": 39.9
@@ -125,11 +125,11 @@
         "in_circle": true
       },
       {
-        "id": "mock-school",
-        "name": "虚构school",
         "category": "school",
         "major_category": "education",
         "minor_category": "school",
+        "id": "mock-school",
+        "name": "虚构school",
         "location": {
           "lng": 116.4,
           "lat": 39.9
@@ -165,35 +165,35 @@
     ],
     "blind_points": [
       {
-        "location": {
-          "lng": 116.4,
-          "lat": 39.9
-        },
         "category": "market",
         "major_category": "shopping",
         "minor_category": "market",
-        "status": "covered",
-        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
-      },
-      {
         "location": {
           "lng": 116.4,
           "lat": 39.9
         },
+        "status": "covered",
+        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
+      },
+      {
         "category": "pharmacy",
         "major_category": "medical",
         "minor_category": "pharmacy",
-        "status": "covered",
-        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
-      },
-      {
         "location": {
           "lng": 116.4,
           "lat": 39.9
         },
+        "status": "covered",
+        "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
+      },
+      {
         "category": "school",
         "major_category": "education",
         "minor_category": "school",
+        "location": {
+          "lng": 116.4,
+          "lat": 39.9
+        },
         "status": "covered",
         "evidence": "合成规则：该类虚构设施位于评估点，步行距离0m。"
       }
