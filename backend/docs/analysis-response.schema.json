@@ -1,0 +1,577 @@
+{
+  "$defs": {
+    "BlindPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/Origin"
+        },
+        "category": {
+          "enum": [
+            "market",
+            "pharmacy",
+            "school"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "covered",
+            "blind",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "category",
+        "status",
+        "evidence"
+      ],
+      "title": "BlindPoint",
+      "type": "object"
+    },
+    "CategoryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "market",
+            "pharmacy",
+            "school"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "query_status": {
+          "enum": [
+            "complete",
+            "unknown",
+            "failed"
+          ],
+          "title": "Query Status",
+          "type": "string"
+        },
+        "count_in_circle": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Count In Circle"
+        },
+        "service_status": {
+          "enum": [
+            "covered",
+            "blind",
+            "unknown"
+          ],
+          "title": "Service Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "query_status",
+        "count_in_circle",
+        "service_status"
+      ],
+      "title": "CategoryResult",
+      "type": "object"
+    },
+    "Data": {
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "uncertain_region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unknown_region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "computation_extent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "facilities": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Facility"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Facilities"
+        },
+        "categories": {
+          "items": {
+            "$ref": "#/$defs/CategoryResult"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "blind_points": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BlindPoint"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blind Points"
+        },
+        "blind_region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "report": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report"
+        }
+      },
+      "title": "Data",
+      "type": "object"
+    },
+    "DistanceRule": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "default": "unconfirmed",
+          "enum": [
+            "unconfirmed",
+            "straight_line",
+            "walking_route"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "threshold_m": {
+          "default": 1000,
+          "exclusiveMinimum": 0,
+          "title": "Threshold M",
+          "type": "number"
+        },
+        "inclusive": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inclusive"
+        },
+        "tolerance_m": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance M"
+        },
+        "assessment_scope": {
+          "default": "unconfirmed",
+          "enum": [
+            "unconfirmed",
+            "isochrone",
+            "community",
+            "sample"
+          ],
+          "title": "Assessment Scope",
+          "type": "string"
+        },
+        "category_policy": {
+          "default": "unconfirmed",
+          "enum": [
+            "unconfirmed",
+            "per_category"
+          ],
+          "title": "Category Policy",
+          "type": "string"
+        }
+      },
+      "title": "DistanceRule",
+      "type": "object"
+    },
+    "Facility": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "market",
+            "pharmacy",
+            "school"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/Origin"
+        },
+        "in_circle": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Circle"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "location",
+        "in_circle"
+      ],
+      "title": "Facility",
+      "type": "object"
+    },
+    "Geometry": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon",
+            "MultiPolygon"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "coordinates": {
+          "items": {},
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "coordinate_system": {
+          "const": "bd09ll",
+          "default": "bd09ll",
+          "title": "Coordinate System",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "title": "Geometry",
+      "type": "object"
+    },
+    "Issue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "severity": {
+          "default": "warning",
+          "enum": [
+            "warning",
+            "error",
+            "pending"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "scope"
+      ],
+      "title": "Issue",
+      "type": "object"
+    },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "lng": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Lng",
+          "type": "number"
+        },
+        "lat": {
+          "exclusiveMaximum": 85,
+          "exclusiveMinimum": -85,
+          "title": "Lat",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lng",
+        "lat"
+      ],
+      "title": "Origin",
+      "type": "object"
+    },
+    "Rules": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": "n04-v1",
+          "title": "Version",
+          "type": "string"
+        },
+        "time_threshold_s": {
+          "const": 900,
+          "default": 900,
+          "title": "Time Threshold S",
+          "type": "integer"
+        },
+        "time_inclusive": {
+          "const": true,
+          "default": true,
+          "title": "Time Inclusive",
+          "type": "boolean"
+        },
+        "time_tolerance_s": {
+          "default": 0,
+          "title": "Time Tolerance S",
+          "type": "number"
+        },
+        "time_confirmation": {
+          "default": "implementation_only",
+          "enum": [
+            "implementation_only",
+            "mock_only"
+          ],
+          "title": "Time Confirmation",
+          "type": "string"
+        },
+        "distance": {
+          "$ref": "#/$defs/DistanceRule"
+        }
+      },
+      "title": "Rules",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "analysis_id": {
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "complete",
+        "partial",
+        "failed",
+        "empty"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "mock",
+        "synthetic",
+        "system"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "algorithm_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Algorithm Version"
+    },
+    "data_updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Data Updated At"
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Origin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coordinate_system": {
+      "const": "bd09ll",
+      "default": "bd09ll",
+      "title": "Coordinate System",
+      "type": "string"
+    },
+    "coordinate_order": {
+      "const": "longitude,latitude",
+      "default": "longitude,latitude",
+      "title": "Coordinate Order",
+      "type": "string"
+    },
+    "units": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Units",
+      "type": "object"
+    },
+    "rules": {
+      "$ref": "#/$defs/Rules"
+    },
+    "data": {
+      "$ref": "#/$defs/Data"
+    },
+    "algorithm": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Algorithm"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "title": "Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "status",
+    "source"
+  ],
+  "title": "AnalysisResponse",
+  "type": "object"
+}

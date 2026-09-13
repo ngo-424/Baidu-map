@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "mock-failed-v1",
+  "generated_at": "2026-09-12T00:00:00Z",
+  "status": "failed",
+  "source": "mock",
+  "algorithm_version": null,
+  "data_updated_at": null,
+  "origin": {
+    "lng": 116.4,
+    "lat": 39.9
+  },
+  "coordinate_system": "bd09ll",
+  "coordinate_order": "longitude,latitude",
+  "units": {
+    "distance": "m",
+    "duration": "s",
+    "area": "m2"
+  },
+  "rules": {
+    "version": "n04-v1",
+    "time_threshold_s": 900,
+    "time_inclusive": true,
+    "time_tolerance_s": 0.0,
+    "time_confirmation": "implementation_only",
+    "distance": {
+      "metric": "unconfirmed",
+      "threshold_m": 1000.0,
+      "inclusive": null,
+      "tolerance_m": null,
+      "assessment_scope": "unconfirmed",
+      "category_policy": "unconfirmed"
+    }
+  },
+  "data": {
+    "geometry": null,
+    "uncertain_region": null,
+    "unknown_region": null,
+    "computation_extent": null,
+    "facilities": null,
+    "categories": [
+      {
+        "category": "market",
+        "query_status": "unknown",
+        "count_in_circle": null,
+        "service_status": "unknown"
+      },
+      {
+        "category": "pharmacy",
+        "query_status": "unknown",
+        "count_in_circle": null,
+        "service_status": "unknown"
+      },
+      {
+        "category": "school",
+        "query_status": "unknown",
+        "count_in_circle": null,
+        "service_status": "unknown"
+      }
+    ],
+    "blind_points": null,
+    "blind_region": null,
+    "report": null
+  },
+  "algorithm": null,
+  "warnings": [
+    {
+      "code": "MOCK_ONLY",
+      "message": "手工构造的契约样例，所有设施和规则选择均为虚构。",
+      "scope": "all",
+      "severity": "warning"
+    }
+  ],
+  "errors": [
+    {
+      "code": "UPSTREAM_UNAVAILABLE",
+      "message": "合成失败样例：上游暂不可用。",
+      "scope": "all",
+      "severity": "error"
+    }
+  ]
+}

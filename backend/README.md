@@ -101,3 +101,16 @@ git check-ignore .env .venv/pyvenv.cfg logs/baidu-smoke.jsonl
 自动测试使用虚拟密钥和模拟 HTTP 响应，不使用真实 AK、不消耗配额。覆盖健康检查、配置优先级、缺少密钥、跨域、响应验证、网络失败、禁止重试与日志脱敏。当前依赖会产生 Starlette 测试客户端的兼容性弃用提示，不影响测试结果。
 
 复核人按 [N02 验收记录](docs/N02-验收记录.md) 检查结果。只有真实调用证据为 `success`，才能勾选“至少一次百度真实请求成功”；测试通过或健康检查成功不能替代此项。
+
+## N04 / N05 新入口
+
+已同步算法提交 `2d63015`（团队主分支合并 `50d3d6b`），并接入当前服务：
+
+- `GET /api/v1/analysis/mock/complete`：另有 `partial`、`failed`、`empty` 三组。
+- `POST /api/v1/analysis/synthetic`：实际执行合成时间场算法，不调用百度。
+- `/docs`：交互式请求与响应模型；[契约说明](docs/N05-接口契约.md)。
+- [参数、调用与边界样例](docs/N04-算法参数与边界.md)、[验收记录](docs/N04-N05-验收记录.md)。
+
+从 backend 执行 `python -m tools.export_contract` 可重建四组 Mock、JSON Schema 和 OpenAPI 快照。使用上述 `.venv` Python。
+
+本地核查环境也可继续使用 backend/.venv 的 Python 3.12；不必创建 D 盘环境。两套 API 暂时并存，任务API为 `/api/analyses`，N05契约API为 `/api/v1/analysis`。

@@ -95,6 +95,24 @@ def test_busy_cancel_no_late_result():
         assert client.post(f"/api/analyses/{task}/cancel").json()["status"] == "cancelled"
 
 
+def test_cancel_lost_response_by_request_key_never_creates_work():
+    class Slow:
+        network = False
+        identity = ("lost-response",)
+
+        async def query_walking_time(self, *args):
+            await asyncio.sleep(60)
+
+    with TestClient(create_app(config(), provider_factory=lambda _: Slow())) as client:
+        assert client.post('/api/analyses/by-request/missing/cancel').status_code == 404
+        assert len(client.app.state.analyses.jobs) == 0
+        task = client.post('/api/analyses', json=body('lost-key')).json()['taskId']
+        response = client.post('/api/analyses/by-request/lost-key/cancel')
+        assert response.status_code == 202 and response.json()['taskId'] == task
+        assert finished(client, task)['status'] == 'cancelled'
+        assert len(client.app.state.analyses.jobs) == 1
+
+
 def test_insufficient_is_completed_not_empty():
     class Unknown:
         network = False

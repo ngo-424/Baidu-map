@@ -5,7 +5,7 @@ import { getBaiduMapAk, resolveMapMode, type MapMode, type MapScriptState } from
 import { loadBaiduMap } from './baiduMapLoader';
 import type { BaiduMapApi } from './baiduMapTypes';
 
-export type BaiduMapStatus = { mode: MapMode; api: BaiduMapApi | null };
+export type BaiduMapStatus = { mode: MapMode; api: BaiduMapApi | null; failureReason: 'missing-key' | 'load-failed' | null };
 
 /**
  * AK 未配置：mode 恒为 fallback（调用方渲染示意地图）。
@@ -23,5 +23,6 @@ export function useBaiduMap(): BaiduMapStatus {
       .catch(() => { if (!cancelled) setScriptState('failed'); });
     return () => { cancelled = true; };
   }, [ak]);
-  return { mode: resolveMapMode(ak, scriptState), api };
+  return { mode: resolveMapMode(ak, scriptState), api,
+    failureReason: !ak ? 'missing-key' : scriptState === 'failed' ? 'load-failed' : null };
 }

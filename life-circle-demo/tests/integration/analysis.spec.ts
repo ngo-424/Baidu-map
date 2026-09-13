@@ -146,3 +146,33 @@ test('network failure is explicit and can resume the same analysis request', asy
   await page.getByRole('button', { name: '重试', exact: true }).click();
   await expect(page.getByText('分析完成', { exact: true })).toBeVisible();
 });
+
+test('lost create response can be cancelled by request key after editing center', async ({ page, request }) => {
+  await mockMap(page);
+  let taskId = '';
+  await page.route('**/api/analyses', async route => {
+    const accepted = await route.fetch();
+    taskId = (await accepted.json()).taskId;
+    await route.abort(); // Server accepted the slow job, but the browser never received its ID.
+  }, { times: 1 });
+  await page.goto('/');
+  await page.getByRole('spinbutton', { name: '经度', exact: true }).fill('116.409');
+  await page.getByRole('button', { name: '开始分析', exact: true }).click();
+  await expect(page.getByText('无法连接后端或请求超时，请检查服务后重试', { exact: true })).toBeVisible();
+  const cancelled = page.waitForResponse(r => r.url().includes('/by-request/') && r.status() === 202);
+  await page.getByRole('spinbutton', { name: '经度', exact: true }).fill('116.404');
+  await cancelled;
+  await expect.poll(async () => (await (await request.get(`http://127.0.0.1:8018/api/analyses/${taskId}`)).json()).status).toBe('cancelled');
+  await analyze(page);
+});
+
+test('malformed successful result shows a format error instead of crashing the page', async ({ page }) => {
+  await mockMap(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/analyses/*/result', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.goto('/');
+  await page.getByRole('button', { name: '开始分析', exact: true }).click();
+  await expect(page.getByText('后端返回格式异常，请检查服务版本', { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});

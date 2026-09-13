@@ -7,7 +7,7 @@ import { drawGeometry } from './geometry';
 
 export type Layers = { reachable: boolean; unknown: boolean; uncertain: boolean; extent: boolean };
 export function ApiMap({ center, result, layers, onPick }: { center: Center; result?: Isochrone; layers: Layers; onPick: (center: Center) => void }) {
-  const { api, mode } = useBaiduMap();
+  const { api, mode, failureReason } = useBaiduMap();
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<BMapMap | null>(null);
   const pick = useRef(onPick);
@@ -42,11 +42,16 @@ export function ApiMap({ center, result, layers, onPick }: { center: Center; res
     } catch { setError(true); }
   }, [api, center, result, layers]);
   const unavailable = error || mode === 'fallback';
+  const failureMessage = failureReason === 'missing-key'
+    ? '尚未配置浏览器地图密钥，请联系项目管理员完成地图配置。仍可输入坐标、执行分析和查看结果摘要。'
+    : error
+      ? '地图初始化或图层绘制失败，请刷新页面重试；持续失败时请联系项目管理员检查浏览器和地图兼容性。'
+      : '百度地图脚本未能加载，请检查网络及浏览器地图密钥的权限和来源限制，修复后刷新页面。仍可输入坐标执行分析。';
   return <div className="api-map-shell">
     <div ref={container} className="api-map" data-testid="algorithm-map" aria-label="等时圈地图" />
     {(unavailable || mode === 'loading') && <div className="api-map-notice" role="status">
       <strong>{unavailable ? '地图不可用' : '正在加载百度地图'}</strong>
-      <p>{unavailable ? '请检查浏览器地图 AK 或网络，修复后刷新页面。仍可输入坐标、执行分析和查看结果摘要。' : '地图就绪后可点击选择分析中心。'}</p>
+      <p>{unavailable ? failureMessage : '地图就绪后可点击选择分析中心。'}</p>
     </div>}
     <div className="api-map-caption">百度坐标 BD09LL · 点击地图选点</div>
   </div>;

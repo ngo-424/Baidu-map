@@ -206,3 +206,42 @@ def test_exploration_phase_cap_includes_retries():
         await s.query((116.42, 39.9))
         assert s.stats.requests == 11
     asyncio.run(run())
+
+
+def test_n06_50_destination_batch_preserves_order_and_explicit_unknowns():
+    """N06: logical walking matrix batches remain ordered and bounded.
+
+    DirectionLite accepts one origin/destination per HTTP call, so Scheduler
+    provides the matrix adapter's logical batching over that single-route API.
+    """
+    async def run():
+        class MatrixStub(StubProvider):
+            def __init__(self):
+                super().__init__()
+                self.attempts = {}
+
+            async def query_walking_time(self, origin, destination, deadline):
+                self.calls.append(destination)
+                attempt = self.attempts.get(destination, 0) + 1
+                self.attempts[destination] = attempt
+                index = round((destination[0] - 116.401) * 10000)
+                if index == 37:
+                    return RouteObservation(destination, None, "no_result")
+                if index in (7, 23, 41) and attempt == 1:
+                    return RouteObservation(destination, None, "temporary")
+                return RouteObservation(destination, 600 + index)
+
+        provider = MatrixStub()
+        request = IsochroneRequest(ORIGIN, "bd09ll", budget=60, concurrency=4, max_attempts=2)
+        scheduler = Scheduler(request, provider, CancelToken())
+        destinations = [(116.401 + i / 10000, 39.9 + (i % 3) / 10000) for i in range(50)]
+        observations = await scheduler.observe_many(destinations)
+
+        assert [observation.destination for observation in observations] == [normalize(p) for p in destinations]
+        assert len(provider.calls) == scheduler.stats.requests
+        assert 50 <= scheduler.stats.requests <= 60
+        assert scheduler.stats.retries == 3
+        assert observations[37].duration is None and observations[37].reason == "no_result"
+        assert all(observation.duration is not None for i, observation in enumerate(observations) if i != 37)
+
+    asyncio.run(run())

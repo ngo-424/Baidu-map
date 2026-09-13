@@ -1,0 +1,63 @@
+{
+  "verified_at": "2026-09-12T09:33:49.909565+00:00",
+  "transport": "local TCP HTTP",
+  "algorithm_version": "2d63015",
+  "external_network_requests": 0,
+  "checks": [
+    {
+      "endpoint": "mock/complete",
+      "http_status": 200,
+      "status": "complete"
+    },
+    {
+      "endpoint": "mock/partial",
+      "http_status": 200,
+      "status": "partial"
+    },
+    {
+      "endpoint": "mock/failed",
+      "http_status": 200,
+      "status": "failed"
+    },
+    {
+      "endpoint": "mock/empty",
+      "http_status": 200,
+      "status": "empty"
+    },
+    {
+      "endpoint": "synthetic",
+      "scenario": "plane",
+      "http_status": 200,
+      "status": "partial",
+      "quality": "partial",
+      "requests": 400,
+      "network_requests": 0,
+      "geometry_is_null": false
+    },
+    {
+      "endpoint": "synthetic",
+      "scenario": "local_failure",
+      "http_status": 200,
+      "status": "partial",
+      "quality": "partial",
+      "requests": 400,
+      "network_requests": 0,
+      "geometry_is_null": false
+    },
+    {
+      "endpoint": "synthetic",
+      "scenario": "global_failure",
+      "http_status": 200,
+      "status": "failed",
+      "quality": "insufficient",
+      "requests": 144,
+      "network_requests": 0,
+      "geometry_is_null": true
+    },
+    {
+      "endpoint": "synthetic-invalid",
+      "http_status": 422,
+      "status": "failed"
+    }
+  ]
+}

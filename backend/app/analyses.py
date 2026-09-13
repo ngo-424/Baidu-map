@@ -211,6 +211,15 @@ def analysis_router(manager):
     async def status(task_id: str):
         return manager.get(task_id).view()
 
+    @router.post("/by-request/{client_request_id}/cancel", status_code=202)
+    async def cancel_by_request(client_request_id: str):
+        # Recover a lost create response without replaying POST and starting new work.
+        manager.prune()
+        for job in manager.jobs.values():
+            if job.payload.clientRequestId == client_request_id:
+                return manager.cancel(job).view()
+        raise HTTPException(404, "任务不存在或已过期")
+
     @router.get("/{task_id}/result")
     async def result(task_id: str):
         job = manager.get(task_id)
