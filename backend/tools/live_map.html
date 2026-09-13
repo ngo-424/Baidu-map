@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>国定一社区 · 真实地图核对</title>
+<style>body{margin:0;font:15px "Microsoft YaHei",sans-serif;background:#eef4f3;color:#183e38}header{padding:16px;background:white}#map{height:calc(100vh - 140px);min-height:420px}button{padding:8px;margin:8px}#status{color:#147d70}</style>
+<header><b>国定一社区 · 真实地图核对</b><p>用户提供中心：121.513926, 31.313077（BD09LL） · 政立路 570 号附近，二师附小北校</p><span id="status">正在加载真实百度 SDK</span><button id="fixture" disabled>显示独立孔洞 / 多分量夹具</button><button id="reset" disabled>回到测试中心</button></header><div id="map"></div>
+<script>
+window.liveMapStatus={loaded:false,fixture:false};
+window.initLiveMap=function(){try{
+ const B=window.BMapGL,map=new B.Map('map'),center=new B.Point(121.513926,31.313077);
+ map.centerAndZoom(center,18);map.enableScrollWheelZoom(true);map.addOverlay(new B.Marker(center));
+ window.liveMap=map;window.liveMapStatus.loaded=true;
+ document.getElementById('status').textContent='真实 SDK 已加载 · 请核对实际底图位置';
+ document.getElementById('fixture').disabled=false;document.getElementById('reset').disabled=false;
+ document.getElementById('reset').onclick=()=>map.centerAndZoom(center,18);
+ document.getElementById('fixture').onclick=()=>{
+   map.clearOverlays();map.addOverlay(new B.Marker(center));
+   function ring(x,y,r){return [[x-r,y-r],[x+r,y-r],[x+r,y+r],[x-r,y+r],[x-r,y-r]].map(p=>(121.513926+p[0])+','+(31.313077+p[1])).join(';');}
+   map.addOverlay(new B.Polygon([ring(0,0,.002),ring(0,0,.0007)],{fillColor:'#16a085',fillOpacity:.45,strokeColor:'#086d5c'}));
+   map.addOverlay(new B.Polygon([ring(.0035,0,.0007)],{fillColor:'#16a085',fillOpacity:.45,strokeColor:'#086d5c'}));
+   window.liveMapStatus.fixture=true;map.centerAndZoom(center,16);
+   document.getElementById('status').textContent='独立几何夹具：一个孔洞、两个分量；不是社区采样结果';
+ };
+}catch(e){document.getElementById('status').textContent='地图初始化失败';window.liveMapStatus.error=true;}};
+const script=document.createElement('script');
+script.src='https://api.map.baidu.com/api?v=1.0&type=webgl&ak='+encodeURIComponent(__BROWSER_AK_JSON__)+'&callback=initLiveMap';
+script.onerror=()=>{document.getElementById('status').textContent='真实 SDK 加载失败';window.liveMapStatus.error=true;};
+document.head.appendChild(script);
+</script></html>

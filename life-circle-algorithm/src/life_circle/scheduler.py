@@ -120,7 +120,7 @@ class Scheduler:
                         if self._stopped() or self.stats.requests >= call_limit:
                             break
                         delay = max(0, self.next_send - self.clock.time())
-                        if delay:
+                        while delay and not self._stopped():
                             if self.clock.time() + delay >= self.deadline:
                                 self.stop_reason = "deadline"
                                 break
@@ -132,6 +132,8 @@ class Scheduler:
                                 if not task.done():
                                     task.cancel()
                             await asyncio.gather(sleeper, cancelled, return_exceptions=True)
+                            # An early timer callback must not authorize a send.
+                            delay = max(0, self.next_send - self.clock.time())
                         if self._stopped():
                             break
                         # No await between final guard and budget reservation.
