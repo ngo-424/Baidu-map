@@ -122,7 +122,7 @@ def pair_coverage(references, excluded=()):
              for s in references if s['pair_id']==i))} for i in range(1,25)]
 
 
-async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, progress=None):
+async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, progress=None, continuation=None):
     clock=clock or Clock()
     ledger.clock=clock.time
     transport=ProgressTransport(ledger,inner,clock=clock.time if gate is not None else time.perf_counter,progress=progress)
@@ -148,15 +148,30 @@ async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, pr
         try:
             begin('reference')
             started=clock.time()
-            request=IsochroneRequest(ORIGIN,'bd09ll',budget=192,qps=3,concurrency=1,expand=False)
-            scheduler=Scheduler(request,provider,ledger.token,clock=clock)
-            observations=await scheduler.observe_many([tuple(p['point']) for p in protocol['validation']])
-            for p,o in zip(protocol['validation'],observations):
-                if tuple(p['point'])!=o.destination: raise LiveGuardError('reference_order_mismatch')
-                references.append(sample_record(o,id=p['id'],pair_id=p['pair_id'],fraction=p['fraction']))
+            if continuation is None:
+                request=IsochroneRequest(ORIGIN,'bd09ll',budget=192,qps=3,concurrency=1,expand=False)
+                scheduler=Scheduler(request,provider,ledger.token,clock=clock)
+                observations=await scheduler.observe_many([tuple(p['point']) for p in protocol['validation']])
+                for p,o in zip(protocol['validation'],observations):
+                    if tuple(p['point'])!=o.destination: raise LiveGuardError('reference_order_mismatch')
+                    references.append(sample_record(o,id=p['id'],pair_id=p['pair_id'],fraction=p['fraction']))
+            else:
+                if continuation['protocol_sha256']!=digest(protocol): raise LiveGuardError('continuation_protocol_changed')
+                merged={tuple(s['point']):dict(s) for s in continuation['parent_references']}
+                for p in continuation['pending']:
+                    if clock.time()>=ledger.deadline:
+                        ledger.data['halted']=ledger.data['halted'] or 'reference_deadline'
+                    if ledger.data['halted'] or ledger.token.cancelled: break
+                    request=IsochroneRequest(ORIGIN,'bd09ll',budget=p['max_attempts'],max_attempts=p['max_attempts'],
+                        qps=3,concurrency=1,expand=False,deadline_seconds=ledger.deadline-clock.time())
+                    scheduler=Scheduler(request,provider,ledger.token,clock=clock)
+                    observation=await scheduler.query(tuple(p['point']))
+                    merged[tuple(p['point'])]=sample_record(observation,id=p['id'],pair_id=p['pair_id'],fraction=p['fraction'],
+                        collection_run=ledger.root.name,collected_at_utc=datetime.fromtimestamp(observation.collected_at,timezone.utc).isoformat())
+                references=[merged[tuple(p['point'])] for p in protocol['validation']]
             dump(ledger.root/'reference.json',references)
             coverage=reference_gate(references)
-            if scheduler.stop_reason in ('cancelled','upstream_failure'):
+            if 'scheduler' in locals() and scheduler.stop_reason in ('cancelled','upstream_failure'):
                 ledger.data['halted']=ledger.data['halted'] or scheduler.stop_reason
             passed=coverage['passed'] and not ledger.data['halted']
             report['stages']['reference']={**coverage,'coverage_passed':coverage['passed'],'passed':passed,
@@ -217,11 +232,16 @@ async def run_boundary(ledger, protocol, ak, *, inner, clock=None, gate=None, pr
                         'reachable' if result.local_geometry.covers(p) else 'unreachable')
                 point_rows.append(row)
             dump(ledger.root/'point-evaluation.json',point_rows)
-            report.update(counts=dict(ledger.data['counts']),total_limit=1392,halted=ledger.data['halted'],
+            report.update(counts=dict(ledger.data['counts']),total_limit=ledger.total_limit,halted=ledger.data['halted'],
                 accounting={p:phase_accounting(ledger.data['events'],p) for p in LIMITS},
                 timing=timing_metrics(ledger.data['events']),pair_coverage=pair_coverage(references,sampled),
                 post_overlap_coverage=reference_gate([s for s in references if tuple(s['point']) not in sampled],require_complete=False),
                 finished_utc=datetime.now(timezone.utc).isoformat())
+            if continuation is not None:
+                report['parent_counts']=continuation['parent_counts']
+                report['parent_accounting']=continuation['parent_accounting']
+                report['cumulative_counts']={p:continuation['parent_counts'][p]+ledger.data['counts'][p] for p in LIMITS}
+                report['cumulative_maximum']=continuation['cumulative_maximum']
             ledger.save()
             write_artifacts(ledger.root,report,results,references)
     return report
@@ -242,9 +262,11 @@ def audit_boundary(root):
     for sample in points:
         events=[e for e in ledger['events'] if e['phase']=='reference' and e['destination']==sample['point']]
         actual=[e for e in events if 'dispatchPerf' in e]
-        sample['measurement_status']=('valid' if valid_reference(sample) else 'invalid_reference') if actual else (
+        inherited=sample.get('prior_confirmed_calls',0)
+        sample['measurement_status']=('valid' if valid_reference(sample) else 'invalid_reference') if actual or inherited else (
             'reserved_without_confirmed_send' if events else 'not_sent_after_stop')
-        sample['confirmed_calls']=len(actual)
+        sample['confirmed_calls']=len(actual)+inherited
+        sample['inherited_confirmed_calls']=inherited
         sample['transport_outcomes']=[e['outcome'] for e in actual]
     report['reference_measurement_status']=dict(Counter(p['measurement_status'] for p in points))
     report['audit']={'source_sha256':hashes,'audit_tool_sha256':file_hash(Path(__file__)),
